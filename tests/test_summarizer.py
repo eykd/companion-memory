@@ -3,7 +3,7 @@
 from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 
-from companion_memory.summarizer import summarize_week
+from companion_memory.summarizer import summarize_day, summarize_week
 
 
 def test_summarize_week_generates_summary_with_llm() -> None:
@@ -59,3 +59,52 @@ def test_summarize_week_generates_summary_with_llm() -> None:
 
     # Verify summary is returned
     assert summary == 'This week you focused on testing, debugging, and code review activities.'
+
+
+def test_summarize_day_generates_summary_with_llm() -> None:
+    """Test that summarize_day() fetches logs and generates summary with LLM."""
+    # Mock log store
+    mock_log_store = MagicMock()
+
+    # Mock logs for past day
+    mock_logs = [
+        {
+            'user_id': 'U123456789',
+            'timestamp': '2024-01-15T10:00:00+00:00',
+            'text': 'Morning standup',
+            'log_id': 'log-1',
+        },
+        {
+            'user_id': 'U123456789',
+            'timestamp': '2024-01-15T14:00:00+00:00',
+            'text': 'Code review session',
+            'log_id': 'log-2',
+        },
+    ]
+    mock_log_store.fetch_logs.return_value = mock_logs
+
+    # Mock LLM client
+    mock_llm = MagicMock()
+    mock_llm.complete.return_value = 'Today you participated in standup and code reviews.'
+
+    # Test summarize_day
+    summary = summarize_day(user_id='U123456789', log_store=mock_log_store, llm=mock_llm)
+
+    # Verify log store was called with correct date range (1 day ago)
+    mock_log_store.fetch_logs.assert_called_once()
+    call_args = mock_log_store.fetch_logs.call_args
+    assert call_args[0][0] == 'U123456789'  # user_id
+    # since should be approximately 1 day ago
+    since_date = call_args[0][1]
+    expected_since = datetime.now(UTC) - timedelta(days=1)
+    assert abs((since_date - expected_since).total_seconds()) < 60  # Within 1 minute
+
+    # Verify LLM was called with logs
+    mock_llm.complete.assert_called_once()
+    llm_call_args = mock_llm.complete.call_args[0][0]
+    assert 'Morning standup' in llm_call_args
+    assert 'Code review session' in llm_call_args
+    assert 'past day' in llm_call_args  # Should use "past day" in prompt
+
+    # Verify summary is returned
+    assert summary == 'Today you participated in standup and code reviews.'

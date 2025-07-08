@@ -78,3 +78,29 @@ def summarize_week(user_id: str, log_store: LogStore, llm: LLMClient) -> str:
 
     # Generate summary using LLM
     return llm.complete(prompt)
+
+
+def summarize_day(user_id: str, log_store: LogStore, llm: LLMClient) -> str:
+    """Generate a summary of the user's logs from the past day.
+
+    Args:
+        user_id: The user identifier
+        log_store: Storage implementation for fetching logs
+        llm: LLM client for generating summaries
+
+    Returns:
+        Generated summary text
+
+    """
+    # Calculate date 1 day ago
+    since = datetime.now(UTC) - timedelta(days=1)
+
+    # Fetch logs from the past day
+    logs = log_store.fetch_logs(user_id, since)
+
+    # Format logs and build prompt
+    logs_text = _format_log_entries(logs)
+    prompt = _build_summary_prompt(logs_text, 'past day')
+
+    # Generate summary using LLM
+    return llm.complete(prompt)
