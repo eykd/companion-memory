@@ -8,6 +8,9 @@ primary_region = 'sea'
 
 [build]
 
+[deploy]
+  strategy = "bluegreen"
+
 [env]
   PORT = '8000'
 
@@ -25,3 +28,13 @@ primary_region = 'sea'
 [[statics]]
   guest_path = '/code/static'
   url_prefix = '/static/'
+
+[[http_service.checks]]
+  # Smoke test. Best used in conjunction with `deploy.strategy =
+  # bluegreen`. The endpoint should validate that the newly-deployed
+  # service is viable before swapping blue and green.
+  path = "/"
+  grace_period = "10s"
+  interval = "60s"
+  method = "GET"
+  timeout = "10s"
