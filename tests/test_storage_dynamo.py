@@ -25,6 +25,8 @@ def test_dynamo_log_store_write_log() -> None:
         # Check the item structure
         call_args = mock_table.put_item.call_args
         item = call_args[1]['Item']
+        assert item['pk'] == 'user#U123456789'
+        assert item['sk'] == f'log#{timestamp}'
         assert item['user_id'] == 'U123456789'
         assert item['timestamp'] == timestamp
         assert item['text'] == 'Working on unit tests'

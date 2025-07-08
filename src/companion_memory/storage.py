@@ -105,6 +105,30 @@ class DynamoLogStore:
         self._dynamodb = boto3.resource('dynamodb')
         self._table = self._dynamodb.Table(table_name)
 
+    def _generate_partition_key(self, user_id: str) -> str:
+        """Generate partition key for DynamoDB.
+
+        Args:
+            user_id: The user identifier
+
+        Returns:
+            Partition key string
+
+        """
+        return f'user#{user_id}'
+
+    def _generate_sort_key(self, timestamp: str) -> str:
+        """Generate sort key for DynamoDB.
+
+        Args:
+            timestamp: ISO 8601 timestamp string
+
+        Returns:
+            Sort key string
+
+        """
+        return f'log#{timestamp}'
+
     def write_log(self, user_id: str, timestamp: str, text: str, log_id: str) -> None:
         """Write a log entry to DynamoDB.
 
@@ -116,6 +140,8 @@ class DynamoLogStore:
 
         """
         item = {
+            'pk': self._generate_partition_key(user_id),
+            'sk': self._generate_sort_key(timestamp),
             'user_id': user_id,
             'timestamp': timestamp,
             'text': text,
