@@ -3,7 +3,7 @@
 from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 
-from companion_memory.summarizer import summarize_day, summarize_week
+from companion_memory.summarizer import send_summary_message, summarize_day, summarize_week
 
 
 def test_summarize_week_generates_summary_with_llm() -> None:
@@ -108,3 +108,40 @@ def test_summarize_day_generates_summary_with_llm() -> None:
 
     # Verify summary is returned
     assert summary == 'Today you participated in standup and code reviews.'
+
+
+def test_send_summary_message_combines_summaries_and_sends_slack() -> None:
+    """Test that send_summary_message() generates both summaries and sends to Slack."""
+    from unittest.mock import patch
+
+    # Mock log store
+    mock_log_store = MagicMock()
+
+    # Mock LLM client
+    mock_llm = MagicMock()
+    mock_llm.complete.side_effect = [
+        'Weekly summary: Focused on testing and development.',
+        'Daily summary: Attended meetings and completed code reviews.',
+    ]
+
+    # Mock Slack client
+    mock_slack_client = MagicMock()
+
+    # Test send_summary_message
+    with patch('companion_memory.summarizer.get_slack_client', return_value=mock_slack_client):
+        send_summary_message(user_id='U123456789', log_store=mock_log_store, llm=mock_llm)
+
+    # Verify LLM was called twice (for week and day summaries)
+    assert mock_llm.complete.call_count == 2
+
+    # Verify Slack client was called to send message
+    mock_slack_client.chat_postMessage.assert_called_once()
+    call_args = mock_slack_client.chat_postMessage.call_args
+
+    # Check message was sent to correct user
+    assert call_args[1]['channel'] == 'U123456789'
+
+    # Check message contains both summaries
+    message_text = call_args[1]['text']
+    assert 'Weekly summary: Focused on testing and development.' in message_text
+    assert 'Daily summary: Attended meetings and completed code reviews.' in message_text

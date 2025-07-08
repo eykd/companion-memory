@@ -3,6 +3,7 @@
 from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
 
+from companion_memory.scheduler import get_slack_client
 from companion_memory.storage import LogStore
 
 
@@ -110,3 +111,30 @@ def summarize_day(user_id: str, log_store: LogStore, llm: LLMClient) -> str:
 
     """
     return _summarize_period(user_id, log_store, llm, days=1, period_name='past day')
+
+
+def send_summary_message(user_id: str, log_store: LogStore, llm: LLMClient) -> None:
+    """Generate and send combined summary message via Slack.
+
+    Args:
+        user_id: The user identifier
+        log_store: Storage implementation for fetching logs
+        llm: LLM client for generating summaries
+
+    """
+    # Generate both weekly and daily summaries
+    weekly_summary = summarize_week(user_id, log_store, llm)
+    daily_summary = summarize_day(user_id, log_store, llm)
+
+    # Format combined message
+    message = f"""Here's your activity summary:
+
+**This Week:**
+{weekly_summary}
+
+**Today:**
+{daily_summary}"""
+
+    # Send via Slack
+    slack_client = get_slack_client()
+    slack_client.chat_postMessage(channel=user_id, text=message)
