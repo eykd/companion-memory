@@ -20,14 +20,21 @@ def get_log_store() -> LogStore:
     return MemoryLogStore()
 
 
-def create_app() -> Flask:
+def create_app(log_store: LogStore | None = None) -> Flask:
     """Create and configure the Flask application.
+
+    Args:
+        log_store: Optional log store instance to inject. If None, uses default.
 
     Returns:
         Configured Flask application instance
 
     """
     app = Flask(__name__)
+
+    # Use injected log store or fall back to default
+    if log_store is None:
+        log_store = get_log_store()
 
     @app.route('/')
     def healthcheck() -> str:
@@ -77,7 +84,6 @@ def create_app() -> Flask:
         timestamp = datetime.now(UTC).isoformat()
 
         # Store the log entry
-        log_store = get_log_store()
         log_store.write_log(user_id=user_id, timestamp=timestamp, text=text, log_id=log_id)
 
         return 'Logged', 200

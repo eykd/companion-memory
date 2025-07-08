@@ -72,12 +72,12 @@ def test_log_endpoint_with_valid_signature_returns_200(client: 'FlaskClient') ->
     assert response.get_data(as_text=True) == 'Logged'
 
 
-def test_log_endpoint_stores_entry_with_valid_signature(client: 'FlaskClient') -> None:
+def test_log_endpoint_stores_entry_with_valid_signature() -> None:
     """Test that /slack/log endpoint stores log entry when signature is valid."""
     import hashlib
     import hmac
     import os
-    from unittest.mock import MagicMock, patch
+    from unittest.mock import MagicMock
 
     # Set up test environment
     test_secret = 'test_secret'  # noqa: S105
@@ -96,7 +96,11 @@ def test_log_endpoint_stores_entry_with_valid_signature(client: 'FlaskClient') -
     # Mock the log store
     mock_store = MagicMock()
 
-    with patch('companion_memory.app.get_log_store', return_value=mock_store):
+    # Create app with injected mock log store
+    app = create_app(log_store=mock_store)
+    app.config['TESTING'] = True
+
+    with app.test_client() as client:
         # Make request with valid signature
         response = client.post(
             '/slack/log',
@@ -118,12 +122,12 @@ def test_log_endpoint_stores_entry_with_valid_signature(client: 'FlaskClient') -
         assert call_args[1]['log_id'] is not None
 
 
-def test_log_endpoint_handles_sampling_responses(client: 'FlaskClient') -> None:
+def test_log_endpoint_handles_sampling_responses() -> None:
     """Test that /slack/log endpoint handles sampling responses like manual logs."""
     import hashlib
     import hmac
     import os
-    from unittest.mock import MagicMock, patch
+    from unittest.mock import MagicMock
 
     # Set up test environment
     test_secret = 'test_secret'  # noqa: S105
@@ -142,7 +146,11 @@ def test_log_endpoint_handles_sampling_responses(client: 'FlaskClient') -> None:
     # Mock the log store
     mock_store = MagicMock()
 
-    with patch('companion_memory.app.get_log_store', return_value=mock_store):
+    # Create app with injected mock log store
+    app = create_app(log_store=mock_store)
+    app.config['TESTING'] = True
+
+    with app.test_client() as client:
         # Make request with valid signature (simulating user response to sampling prompt)
         response = client.post(
             '/slack/log',
@@ -239,3 +247,18 @@ def test_events_endpoint_handles_url_verification(client: 'FlaskClient') -> None
 
     assert response.status_code == 200
     assert response.get_data(as_text=True) == challenge_value
+
+
+def test_create_app_accepts_injected_log_store(client: 'FlaskClient') -> None:
+    """Test that create_app accepts an injected log store."""
+    from unittest.mock import MagicMock
+
+    # Create a mock log store
+    mock_log_store = MagicMock()
+
+    # Create app with injected log store
+    app = create_app(log_store=mock_log_store)
+    app.config['TESTING'] = True
+
+    # Verify that the app was created successfully
+    assert app is not None
