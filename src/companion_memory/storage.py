@@ -168,11 +168,27 @@ class DynamoLogStore:
         since_str = since.isoformat()
         since_sort_key = self._generate_sort_key(since_str)
 
-        # Query DynamoDB for logs since the given date
-        response = self._table.query(KeyConditionExpression=Key('pk').eq(partition_key) & Key('sk').gte(since_sort_key))
+        # Query DynamoDB for logs since the given date with pagination support
+        items = []
+        last_evaluated_key = None
 
-        # Extract items from response
-        items = response.get('Items', [])
+        while True:
+            query_kwargs = {'KeyConditionExpression': Key('pk').eq(partition_key) & Key('sk').gte(since_sort_key)}
+
+            if last_evaluated_key:
+                query_kwargs['ExclusiveStartKey'] = last_evaluated_key
+
+            try:
+                response = self._table.query(**query_kwargs)
+                items.extend(response.get('Items', []))
+
+                last_evaluated_key = response.get('LastEvaluatedKey')
+                if not last_evaluated_key:
+                    break
+
+            except Exception:  # noqa: BLE001
+                # Fallback: return empty list if DynamoDB query fails (broad except needed for AWS SDK exceptions)
+                return []
 
         # Filter items by timestamp (additional filtering beyond sort key)
         filtered_items = []
