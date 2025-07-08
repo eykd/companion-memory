@@ -211,6 +211,9 @@ mypy_path = "src"
 profile = "black"
 
 [dependency-groups]
+dev = [
+    "ipython>=9.4.0",
+]
 test = [
     "mypy>=1.16.1",
     "pytest>=8.4.1",
