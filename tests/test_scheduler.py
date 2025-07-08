@@ -4,6 +4,8 @@ import time
 from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 
+import pytest
+
 from companion_memory.scheduler import create_scheduler, send_sampling_prompt
 
 
@@ -63,3 +65,51 @@ def test_scheduler_sends_sampling_dm() -> None:
         finally:
             # Always shut down scheduler
             scheduler.shutdown(wait=False)
+
+
+def test_create_scheduler_blocking_mode() -> None:
+    """Test that create_scheduler returns BlockingScheduler when blocking=True."""
+    from apscheduler.schedulers.blocking import BlockingScheduler  # type: ignore[import-untyped]
+
+    scheduler = create_scheduler(blocking=True)
+    assert isinstance(scheduler, BlockingScheduler)
+
+
+def test_get_slack_client_missing_token() -> None:
+    """Test that get_slack_client raises ValueError when SLACK_BOT_TOKEN is missing."""
+    import os
+
+    from companion_memory.scheduler import get_slack_client
+
+    # Remove the token if it exists
+    original_token = os.environ.get('SLACK_BOT_TOKEN')
+    if 'SLACK_BOT_TOKEN' in os.environ:
+        del os.environ['SLACK_BOT_TOKEN']
+
+    try:
+        with pytest.raises(ValueError, match='SLACK_BOT_TOKEN environment variable is required'):
+            get_slack_client()
+    finally:
+        # Restore original token
+        if original_token is not None:
+            os.environ['SLACK_BOT_TOKEN'] = original_token
+
+
+def test_get_slack_client_with_token() -> None:
+    """Test that get_slack_client returns WebClient when token is present."""
+    import os
+
+    from slack_sdk import WebClient
+
+    from companion_memory.scheduler import get_slack_client
+
+    # Set a test token
+    os.environ['SLACK_BOT_TOKEN'] = 'test-token'  # noqa: S105
+
+    try:
+        client = get_slack_client()
+        assert isinstance(client, WebClient)
+    finally:
+        # Clean up
+        if 'SLACK_BOT_TOKEN' in os.environ:
+            del os.environ['SLACK_BOT_TOKEN']

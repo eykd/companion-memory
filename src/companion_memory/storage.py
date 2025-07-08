@@ -20,7 +20,7 @@ class LogStore(Protocol):
             log_id: Unique identifier for the log entry
 
         """
-        ...
+        ...  # pragma: no cover
 
     def fetch_logs(self, user_id: str, since: datetime) -> list[dict[str, Any]]:
         """Fetch log entries for a user since a given date.
@@ -33,7 +33,7 @@ class LogStore(Protocol):
             List of log entries as dictionaries
 
         """
-        ...
+        ...  # pragma: no cover
 
 
 class MemoryLogStore:
