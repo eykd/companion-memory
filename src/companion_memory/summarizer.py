@@ -113,6 +113,26 @@ def summarize_day(user_id: str, log_store: LogStore, llm: LLMClient) -> str:
     return _summarize_period(user_id, log_store, llm, days=1, period_name='past day')
 
 
+def _format_summary_message(weekly_summary: str, daily_summary: str) -> str:
+    """Format combined weekly and daily summaries into a message.
+
+    Args:
+        weekly_summary: Summary of the past week's activities
+        daily_summary: Summary of the past day's activities
+
+    Returns:
+        Formatted message text
+
+    """
+    return f"""Here's your activity summary:
+
+**This Week:**
+{weekly_summary}
+
+**Today:**
+{daily_summary}"""
+
+
 def send_summary_message(user_id: str, log_store: LogStore, llm: LLMClient) -> None:
     """Generate and send combined summary message via Slack.
 
@@ -127,13 +147,7 @@ def send_summary_message(user_id: str, log_store: LogStore, llm: LLMClient) -> N
     daily_summary = summarize_day(user_id, log_store, llm)
 
     # Format combined message
-    message = f"""Here's your activity summary:
-
-**This Week:**
-{weekly_summary}
-
-**Today:**
-{daily_summary}"""
+    message = _format_summary_message(weekly_summary, daily_summary)
 
     # Send via Slack
     slack_client = get_slack_client()
