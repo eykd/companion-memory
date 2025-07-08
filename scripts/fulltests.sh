@@ -10,4 +10,4 @@ set -a # automatically export all variables
 set +a
 
 uv run ruff check
-poetry run pytest --cov-fail-under=100
+uv run pytest --cov-fail-under=100
