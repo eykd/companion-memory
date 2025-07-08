@@ -162,3 +162,45 @@ def test_log_endpoint_handles_sampling_responses(client: 'FlaskClient') -> None:
         assert call_args[1]['text'] == 'Working on debugging the API'
         assert call_args[1]['timestamp'] is not None
         assert call_args[1]['log_id'] is not None
+
+
+def test_events_endpoint_with_invalid_signature_returns_403(client: 'FlaskClient') -> None:
+    """Test that /slack/events endpoint returns 403 for invalid signature."""
+    response = client.post(
+        '/slack/events',
+        data={'event': 'test_event'},
+        headers={'X-Slack-Request-Timestamp': '1234567890', 'X-Slack-Signature': 'invalid'},
+    )
+    assert response.status_code == 403
+
+
+def test_events_endpoint_with_valid_signature_returns_200(client: 'FlaskClient') -> None:
+    """Test that /slack/events endpoint returns 200 for valid signature."""
+    import hashlib
+    import hmac
+    import os
+
+    # Set up test environment
+    test_secret = 'test_secret'  # noqa: S105
+    os.environ['SLACK_SIGNING_SECRET'] = test_secret
+
+    # Create test request data
+    request_body = 'event=test_event&type=message'
+    request_timestamp = '1234567890'
+
+    # Create valid signature
+    sig_basestring = f'v0:{request_timestamp}:{request_body}'
+    expected_signature = (
+        'v0=' + hmac.new(test_secret.encode('utf-8'), sig_basestring.encode('utf-8'), hashlib.sha256).hexdigest()
+    )
+
+    # Make request with valid signature
+    response = client.post(
+        '/slack/events',
+        data=request_body,
+        headers={'X-Slack-Request-Timestamp': request_timestamp, 'X-Slack-Signature': expected_signature},
+        content_type='application/x-www-form-urlencoded',
+    )
+
+    assert response.status_code == 200
+    assert response.get_data(as_text=True) == ''

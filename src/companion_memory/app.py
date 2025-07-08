@@ -82,4 +82,23 @@ def create_app() -> Flask:
 
         return 'Logged', 200
 
+    @app.route('/slack/events', methods=['POST'])
+    def slack_events() -> tuple[str, int]:
+        """Handle Slack events webhook.
+
+        Returns:
+            Response tuple with empty message and status code
+
+        """
+        # Get signature validation headers
+        timestamp = request.headers.get('X-Slack-Request-Timestamp', '')
+        signature = request.headers.get('X-Slack-Signature', '')
+
+        # Validate signature
+        if not validate_slack_signature(request.get_data(), timestamp, signature):
+            return 'Invalid signature', 403
+
+        # No-op: do nothing with the event data
+        return '', 200
+
     return app
