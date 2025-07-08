@@ -37,7 +37,7 @@ jobs:
         path: ./.venv
         key: ${{ runner.os }}-venv-${{ hashFiles('uv.lock') }}
         restore-keys: |
-          ${{ runner.os }}-venv-${{ hashFiles(uv.lock') }}
+          ${{ runner.os }}-venv-${{ hashFiles('uv.lock') }}
           ${{ runner.os }}-venv-
     - name: Install dependencies
       run: |
