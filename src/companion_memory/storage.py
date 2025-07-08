@@ -3,6 +3,8 @@
 from datetime import datetime
 from typing import Any, Protocol
 
+import boto3  # type: ignore[import-untyped]
+
 
 class LogStore(Protocol):
     """Protocol for log storage implementations."""
@@ -87,3 +89,50 @@ class MemoryLogStore:
                 filtered_logs.append(log_entry)
 
         return filtered_logs
+
+
+class DynamoLogStore:
+    """DynamoDB implementation of LogStore."""
+
+    def __init__(self, table_name: str = 'companion-memory-logs') -> None:
+        """Initialize the DynamoDB log store.
+
+        Args:
+            table_name: Name of the DynamoDB table to use
+
+        """
+        self._table_name = table_name
+        self._dynamodb = boto3.resource('dynamodb')
+        self._table = self._dynamodb.Table(table_name)
+
+    def write_log(self, user_id: str, timestamp: str, text: str, log_id: str) -> None:
+        """Write a log entry to DynamoDB.
+
+        Args:
+            user_id: The user identifier
+            timestamp: ISO 8601 timestamp string
+            text: The log content
+            log_id: Unique identifier for the log entry
+
+        """
+        item = {
+            'user_id': user_id,
+            'timestamp': timestamp,
+            'text': text,
+            'log_id': log_id,
+        }
+        self._table.put_item(Item=item)
+
+    def fetch_logs(self, _user_id: str, _since: datetime) -> list[dict[str, Any]]:
+        """Fetch log entries for a user since a given date.
+
+        Args:
+            _user_id: The user identifier
+            _since: Fetch logs from this date onwards
+
+        Returns:
+            List of log entries as dictionaries
+
+        """
+        # TODO: Implement in Step 11
+        return []
