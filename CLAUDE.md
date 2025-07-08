@@ -158,3 +158,11 @@ When implementing new features or making changes, follow this strict step-by-ste
 - **COMMIT**: Commit the refactored code with a descriptive message.
 - Never skip any step in this process.
 - Each commit should leave the codebase in a working, tested state.
+
+## Dependency Management
+
+When managing project dependencies and packages:
+
+- Always run `uv sync --all-groups` instead of just `uv sync` to ensure all dependency groups (dev, test, etc.) are properly installed.
+- Run `uv sync --all-groups` after making changes to pyproject.toml that affect dependencies or entry-points.
+- This ensures consistent development environments with all required tools available.

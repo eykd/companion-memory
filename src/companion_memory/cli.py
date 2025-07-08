@@ -7,11 +7,11 @@ from companion_memory.commands import run_scheduler, run_web_server
 
 @click.group()
 def cli() -> None:
-    """companion-scheduler - Work activity tracking and summarization."""
+    """Comem - Work activity tracking and summarization."""
 
 
 @cli.command()
-def run() -> None:
+def scheduler() -> None:
     """Run the companion scheduler."""
     run_scheduler()
 

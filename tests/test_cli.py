@@ -11,24 +11,24 @@ def test_cli_help_text() -> None:
     result = runner.invoke(cli, ['--help'])
 
     assert result.exit_code == 0
-    assert 'companion-scheduler' in result.output
-    assert 'run' in result.output
+    assert 'Comem' in result.output
+    assert 'scheduler' in result.output
     assert 'web' in result.output
 
 
-def test_cli_run_command_exists() -> None:
-    """Test that CLI has a run command."""
+def test_cli_scheduler_command_exists() -> None:
+    """Test that CLI has a scheduler command."""
     runner = CliRunner()
-    result = runner.invoke(cli, ['run', '--help'])
+    result = runner.invoke(cli, ['scheduler', '--help'])
 
     assert result.exit_code == 0
-    assert 'run' in result.output
+    assert 'scheduler' in result.output
 
 
-def test_cli_run_command_execution() -> None:
-    """Test that CLI run command executes successfully."""
+def test_cli_scheduler_command_execution() -> None:
+    """Test that CLI scheduler command executes successfully."""
     runner = CliRunner()
-    result = runner.invoke(cli, ['run'])
+    result = runner.invoke(cli, ['scheduler'])
 
     assert result.exit_code == 0
     assert 'Starting companion scheduler...' in result.output

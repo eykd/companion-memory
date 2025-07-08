@@ -17,7 +17,7 @@ dependencies = [
 ]
 
 [project.scripts]
-companion-scheduler = "companion_memory.cli:cli"
+comem = "companion_memory.cli:cli"
 
 [build-system]
 requires = ["hatchling"]
