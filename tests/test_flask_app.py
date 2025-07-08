@@ -33,13 +33,15 @@ def test_fail_endpoint_returns_500(client: 'FlaskClient') -> None:
 
 
 def test_log_endpoint_with_invalid_signature_returns_403(client: 'FlaskClient') -> None:
-    """Test that /log endpoint returns 403 for invalid signature."""
-    response = client.post('/log', data={'text': 'test message', 'user_id': 'U123456789', 'timestamp': '1234567890'})
+    """Test that /slack/log endpoint returns 403 for invalid signature."""
+    response = client.post(
+        '/slack/log', data={'text': 'test message', 'user_id': 'U123456789', 'timestamp': '1234567890'}
+    )
     assert response.status_code == 403
 
 
 def test_log_endpoint_with_valid_signature_returns_200(client: 'FlaskClient') -> None:
-    """Test that /log endpoint returns 200 for valid signature."""
+    """Test that /slack/log endpoint returns 200 for valid signature."""
     import hashlib
     import hmac
     import os
@@ -60,7 +62,7 @@ def test_log_endpoint_with_valid_signature_returns_200(client: 'FlaskClient') ->
 
     # Make request with valid signature
     response = client.post(
-        '/log',
+        '/slack/log',
         data=request_body,
         headers={'X-Slack-Request-Timestamp': request_timestamp, 'X-Slack-Signature': expected_signature},
         content_type='application/x-www-form-urlencoded',
@@ -71,7 +73,7 @@ def test_log_endpoint_with_valid_signature_returns_200(client: 'FlaskClient') ->
 
 
 def test_log_endpoint_stores_entry_with_valid_signature(client: 'FlaskClient') -> None:
-    """Test that /log endpoint stores log entry when signature is valid."""
+    """Test that /slack/log endpoint stores log entry when signature is valid."""
     import hashlib
     import hmac
     import os
@@ -97,7 +99,7 @@ def test_log_endpoint_stores_entry_with_valid_signature(client: 'FlaskClient') -
     with patch('companion_memory.app.get_log_store', return_value=mock_store):
         # Make request with valid signature
         response = client.post(
-            '/log',
+            '/slack/log',
             data=request_body,
             headers={'X-Slack-Request-Timestamp': request_timestamp, 'X-Slack-Signature': expected_signature},
             content_type='application/x-www-form-urlencoded',
@@ -117,7 +119,7 @@ def test_log_endpoint_stores_entry_with_valid_signature(client: 'FlaskClient') -
 
 
 def test_log_endpoint_handles_sampling_responses(client: 'FlaskClient') -> None:
-    """Test that /log endpoint handles sampling responses like manual logs."""
+    """Test that /slack/log endpoint handles sampling responses like manual logs."""
     import hashlib
     import hmac
     import os
@@ -143,7 +145,7 @@ def test_log_endpoint_handles_sampling_responses(client: 'FlaskClient') -> None:
     with patch('companion_memory.app.get_log_store', return_value=mock_store):
         # Make request with valid signature (simulating user response to sampling prompt)
         response = client.post(
-            '/log',
+            '/slack/log',
             data=request_body,
             headers={'X-Slack-Request-Timestamp': request_timestamp, 'X-Slack-Signature': expected_signature},
             content_type='application/x-www-form-urlencoded',

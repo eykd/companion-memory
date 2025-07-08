@@ -49,7 +49,7 @@ def create_app() -> Flask:
         """
         raise RuntimeError('Test exception')
 
-    @app.route('/log', methods=['POST'])
+    @app.route('/slack/log', methods=['POST'])
     def log_entry() -> tuple[str, int]:
         """Handle Slack /log command.
 
