@@ -1,8 +1,23 @@
 """Flask web application for webhook handling."""
 
+import uuid
+from datetime import UTC, datetime
+from urllib.parse import parse_qs
+
 from flask import Flask, request
 
 from companion_memory.slack_auth import validate_slack_signature
+from companion_memory.storage import LogStore, MemoryLogStore
+
+
+def get_log_store() -> LogStore:
+    """Get the log store instance.
+
+    Returns:
+        LogStore instance (currently returns MemoryLogStore for testing)
+
+    """
+    return MemoryLogStore()
 
 
 def create_app() -> Flask:
@@ -40,7 +55,21 @@ def create_app() -> Flask:
         if not validate_slack_signature(request.get_data(), timestamp, signature):
             return 'Invalid signature', 403
 
-        # For now, just return success
-        return 'OK', 200
+        # Parse the request data
+        request_data = parse_qs(request.get_data(as_text=True))
+
+        # Extract log entry data
+        text = request_data.get('text', [''])[0]
+        user_id = request_data.get('user_id', [''])[0]
+
+        # Create log entry
+        log_id = str(uuid.uuid4())
+        timestamp = datetime.now(UTC).isoformat()
+
+        # Store the log entry
+        log_store = get_log_store()
+        log_store.write_log(user_id=user_id, timestamp=timestamp, text=text, log_id=log_id)
+
+        return 'Logged', 200
 
     return app
