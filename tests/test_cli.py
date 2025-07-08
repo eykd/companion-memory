@@ -55,3 +55,17 @@ def test_cli_web_command_execution() -> None:
     assert result.exit_code == 0
     mock_create_app.assert_called_once()
     mock_app.run.assert_called_once_with(host='127.0.0.1', port=5000, debug=True)
+
+
+def test_cli_web_command_with_options() -> None:
+    """Test that CLI web command accepts custom options."""
+    from unittest.mock import patch
+
+    runner = CliRunner()
+    with patch('companion_memory.app.create_app') as mock_create_app:
+        mock_app = mock_create_app.return_value
+        result = runner.invoke(cli, ['web', '--host', '0.0.0.0', '--port', '8080', '--no-debug'])  # noqa: S104
+
+    assert result.exit_code == 0
+    mock_create_app.assert_called_once()
+    mock_app.run.assert_called_once_with(host='0.0.0.0', port=8080, debug=False)  # noqa: S104
