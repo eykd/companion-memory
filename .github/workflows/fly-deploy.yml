@@ -41,7 +41,7 @@ jobs:
           ${{ runner.os }}-venv-
     - name: Install dependencies
       run: |
-        python -m uv sync --with=test
+        python -m uv sync --group test
     - name: Test with pytest
       run: |
         sh scripts/fulltests.sh
