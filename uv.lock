@@ -79,12 +79,16 @@ source = { editable = "." }
 dependencies = [
     { name = "apscheduler" },
     { name = "boto3" },
+    { name = "click" },
     { name = "flask" },
     { name = "python-dotenv" },
     { name = "slack-sdk" },
 ]
 
 [package.dev-dependencies]
+dev = [
+    { name = "mypy" },
+]
 test = [
     { name = "mypy" },
     { name = "pytest" },
@@ -96,12 +100,14 @@ test = [
 requires-dist = [
     { name = "apscheduler", specifier = ">=3.11.0" },
     { name = "boto3", specifier = ">=1.39.3" },
+    { name = "click", specifier = ">=8.1.0" },
     { name = "flask", specifier = ">=3.1.1" },
     { name = "python-dotenv", specifier = ">=1.1.1" },
     { name = "slack-sdk", specifier = ">=3.35.0" },
 ]
 
 [package.metadata.requires-dev]
+dev = [{ name = "mypy", specifier = ">=1.16.1" }]
 test = [
     { name = "mypy", specifier = ">=1.16.1" },
     { name = "pytest", specifier = ">=8.4.1" },
