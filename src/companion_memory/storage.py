@@ -61,7 +61,7 @@ class MemoryLogStore:
         }
         self._storage[user_id].append(log_entry)
 
-    def fetch_logs(self, user_id: str, since: datetime) -> list[dict[str, Any]]:  # noqa: ARG002
+    def fetch_logs(self, user_id: str, since: datetime) -> list[dict[str, Any]]:
         """Fetch log entries for a user since a given date.
 
         Args:
@@ -72,4 +72,18 @@ class MemoryLogStore:
             List of log entries as dictionaries
 
         """
-        return []
+        if user_id not in self._storage:
+            return []
+
+        user_logs = self._storage[user_id]
+        filtered_logs = []
+
+        for log_entry in user_logs:
+            # Parse the ISO timestamp string
+            log_timestamp = datetime.fromisoformat(log_entry['timestamp'].replace('Z', '+00:00'))  # noqa: FURB162
+
+            # Filter logs that are at or after the 'since' datetime
+            if log_timestamp >= since:
+                filtered_logs.append(log_entry)
+
+        return filtered_logs
