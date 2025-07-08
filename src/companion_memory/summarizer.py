@@ -54,6 +54,34 @@ def _build_summary_prompt(logs_text: str, period: str) -> str:
 Provide a concise summary of the main activities and themes."""
 
 
+def _summarize_period(user_id: str, log_store: LogStore, llm: LLMClient, days: int, period_name: str) -> str:
+    """Generate a summary of the user's logs from a specified time period.
+
+    Args:
+        user_id: The user identifier
+        log_store: Storage implementation for fetching logs
+        llm: LLM client for generating summaries
+        days: Number of days to look back
+        period_name: Human-readable period description for the prompt
+
+    Returns:
+        Generated summary text
+
+    """
+    # Calculate date N days ago
+    since = datetime.now(UTC) - timedelta(days=days)
+
+    # Fetch logs from the period
+    logs = log_store.fetch_logs(user_id, since)
+
+    # Format logs and build prompt
+    logs_text = _format_log_entries(logs)
+    prompt = _build_summary_prompt(logs_text, period_name)
+
+    # Generate summary using LLM
+    return llm.complete(prompt)
+
+
 def summarize_week(user_id: str, log_store: LogStore, llm: LLMClient) -> str:
     """Generate a summary of the user's logs from the past week.
 
@@ -66,18 +94,7 @@ def summarize_week(user_id: str, log_store: LogStore, llm: LLMClient) -> str:
         Generated summary text
 
     """
-    # Calculate date 7 days ago
-    since = datetime.now(UTC) - timedelta(days=7)
-
-    # Fetch logs from the past week
-    logs = log_store.fetch_logs(user_id, since)
-
-    # Format logs and build prompt
-    logs_text = _format_log_entries(logs)
-    prompt = _build_summary_prompt(logs_text, 'past week')
-
-    # Generate summary using LLM
-    return llm.complete(prompt)
+    return _summarize_period(user_id, log_store, llm, days=7, period_name='past week')
 
 
 def summarize_day(user_id: str, log_store: LogStore, llm: LLMClient) -> str:
@@ -92,15 +109,4 @@ def summarize_day(user_id: str, log_store: LogStore, llm: LLMClient) -> str:
         Generated summary text
 
     """
-    # Calculate date 1 day ago
-    since = datetime.now(UTC) - timedelta(days=1)
-
-    # Fetch logs from the past day
-    logs = log_store.fetch_logs(user_id, since)
-
-    # Format logs and build prompt
-    logs_text = _format_log_entries(logs)
-    prompt = _build_summary_prompt(logs_text, 'past day')
-
-    # Generate summary using LLM
-    return llm.complete(prompt)
+    return _summarize_period(user_id, log_store, llm, days=1, period_name='past day')
