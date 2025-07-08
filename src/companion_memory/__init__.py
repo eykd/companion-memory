@@ -1,2 +1,5 @@
+"""Companion Memory package."""
+
+
 def main() -> None:
-    print('Hello from companion-memory!')
+    """Main entrypoint for companion-memory CLI."""

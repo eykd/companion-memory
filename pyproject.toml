@@ -161,7 +161,6 @@ addopts = [
     "--no-cov-on-fail",
     "--strict-markers",
     "--strict-config",
-    "--random-order",
 
 ]
 
@@ -191,9 +190,7 @@ show_missing = true
 # Python type checking
 # https://www.mypy-lang.org/
 strict = true
-plugins = [
-    "pydantic.mypy",
-]
+plugins = []
 mypy_path = "src"
 
 
@@ -202,3 +199,11 @@ mypy_path = "src"
 # Python import sorter
 # https://pycqa.github.io/isort/
 profile = "black"
+
+[dependency-groups]
+test = [
+    "mypy>=1.16.1",
+    "pytest>=8.4.1",
+    "pytest-cov>=6.2.1",
+    "pytest-randomly>=3.16.0",
+]

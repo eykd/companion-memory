@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir:*)",
+      "Bash(./scripts/runtests.sh:*)",
+      "Bash(uv run pytest:*)",
+      "Bash(uv add:*)",
+      "Bash(ls:*)",
+      "Bash(uv run:*)",
+      "Bash(uv run ruff check:*)",
+      "Bash(git add:*)"
+    ],
+    "deny": []
+  }
+}
