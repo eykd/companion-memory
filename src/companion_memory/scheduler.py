@@ -2,8 +2,8 @@
 
 import os
 
-from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.schedulers.blocking import BlockingScheduler
+from apscheduler.schedulers.background import BackgroundScheduler  # type: ignore[import-untyped]
+from apscheduler.schedulers.blocking import BlockingScheduler  # type: ignore[import-untyped]
 from slack_sdk import WebClient
 
 

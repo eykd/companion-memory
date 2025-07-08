@@ -22,7 +22,7 @@ When writing or editing Python code (`*.py`), follow these quality standards:
 - Run code quality tools:
   - Format: `uv run ruff format`
   - Lint: `uv run ruff check --fix`
-  - Type check: `uv run mypy`
+  - Type check: `uv run mypy src tests`
 
 ## Hexagonal Architecture
 
