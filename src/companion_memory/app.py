@@ -39,6 +39,16 @@ def create_app() -> Flask:
         """
         return 'OK'
 
+    @app.route('/fail')
+    def fail() -> str:
+        """Fail endpoint.
+
+        Returns:
+            Always raises an exception
+
+        """
+        raise RuntimeError('Test exception')
+
     @app.route('/log', methods=['POST'])
     def log_entry() -> tuple[str, int]:
         """Handle Slack /log command.

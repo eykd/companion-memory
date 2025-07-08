@@ -26,6 +26,12 @@ def test_root_url_returns_200(client: 'FlaskClient') -> None:
     assert response.status_code == 200
 
 
+def test_fail_endpoint_returns_500(client: 'FlaskClient') -> None:
+    """Test that /fail endpoint returns 500 status code."""
+    with pytest.raises(RuntimeError):
+        client.get('/fail')
+
+
 def test_log_endpoint_with_invalid_signature_returns_403(client: 'FlaskClient') -> None:
     """Test that /log endpoint returns 403 for invalid signature."""
     response = client.post('/log', data={'text': 'test message', 'user_id': 'U123456789', 'timestamp': '1234567890'})
