@@ -168,7 +168,7 @@ def test_events_endpoint_with_invalid_signature_returns_403(client: 'FlaskClient
     """Test that /slack/events endpoint returns 403 for invalid signature."""
     response = client.post(
         '/slack/events',
-        data={'event': 'test_event'},
+        json={'event': 'test_event'},
         headers={'X-Slack-Request-Timestamp': '1234567890', 'X-Slack-Signature': 'invalid'},
     )
     assert response.status_code == 403
@@ -178,6 +178,7 @@ def test_events_endpoint_with_valid_signature_returns_200(client: 'FlaskClient')
     """Test that /slack/events endpoint returns 200 for valid signature."""
     import hashlib
     import hmac
+    import json
     import os
 
     # Set up test environment
@@ -185,7 +186,7 @@ def test_events_endpoint_with_valid_signature_returns_200(client: 'FlaskClient')
     os.environ['SLACK_SIGNING_SECRET'] = test_secret
 
     # Create test request data
-    request_body = 'event=test_event&type=message'
+    request_body = json.dumps({'event': 'test_event', 'type': 'message'})
     request_timestamp = '1234567890'
 
     # Create valid signature
@@ -199,8 +200,42 @@ def test_events_endpoint_with_valid_signature_returns_200(client: 'FlaskClient')
         '/slack/events',
         data=request_body,
         headers={'X-Slack-Request-Timestamp': request_timestamp, 'X-Slack-Signature': expected_signature},
-        content_type='application/x-www-form-urlencoded',
+        content_type='application/json',
     )
 
     assert response.status_code == 200
     assert response.get_data(as_text=True) == ''
+
+
+def test_events_endpoint_handles_url_verification(client: 'FlaskClient') -> None:
+    """Test that /slack/events endpoint handles URL verification challenge."""
+    import hashlib
+    import hmac
+    import json
+    import os
+
+    # Set up test environment
+    test_secret = 'test_secret'  # noqa: S105
+    os.environ['SLACK_SIGNING_SECRET'] = test_secret
+
+    # Create test request data for URL verification
+    challenge_value = 'test_challenge_123'
+    request_body = json.dumps({'type': 'url_verification', 'challenge': challenge_value})
+    request_timestamp = '1234567890'
+
+    # Create valid signature
+    sig_basestring = f'v0:{request_timestamp}:{request_body}'
+    expected_signature = (
+        'v0=' + hmac.new(test_secret.encode('utf-8'), sig_basestring.encode('utf-8'), hashlib.sha256).hexdigest()
+    )
+
+    # Make request with valid signature
+    response = client.post(
+        '/slack/events',
+        data=request_body,
+        headers={'X-Slack-Request-Timestamp': request_timestamp, 'X-Slack-Signature': expected_signature},
+        content_type='application/json',
+    )
+
+    assert response.status_code == 200
+    assert response.get_data(as_text=True) == challenge_value

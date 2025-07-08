@@ -98,7 +98,15 @@ def create_app() -> Flask:
         if not validate_slack_signature(request.get_data(), timestamp, signature):
             return 'Invalid signature', 403
 
-        # No-op: do nothing with the event data
+        # Parse the request data
+        request_data = request.get_json()
+
+        # Handle URL verification
+        if request_data and request_data.get('type') == 'url_verification':
+            challenge = request_data.get('challenge', '')
+            return challenge, 200
+
+        # No-op: do nothing with other event data
         return '', 200
 
     return app
