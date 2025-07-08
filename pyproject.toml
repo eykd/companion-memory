@@ -7,7 +7,9 @@ authors = [
     { name = "eykd", email = "david@worldsenoughstudios.com" }
 ]
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "flask>=3.1.1",
+]
 
 [project.scripts]
 companion-memory = "companion_memory:main"
