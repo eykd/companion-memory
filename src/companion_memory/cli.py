@@ -2,6 +2,8 @@
 
 import click
 
+from companion_memory.commands import run_scheduler
+
 
 @click.group()
 def cli() -> None:
@@ -11,4 +13,4 @@ def cli() -> None:
 @cli.command()
 def run() -> None:
     """Run the companion scheduler."""
-    click.echo('Starting companion scheduler...')
+    run_scheduler()
