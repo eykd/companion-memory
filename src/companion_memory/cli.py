@@ -2,7 +2,7 @@
 
 import click
 
-from companion_memory.commands import run_scheduler
+from companion_memory.commands import run_scheduler, run_web_server
 
 
 @click.group()
@@ -14,3 +14,9 @@ def cli() -> None:
 def run() -> None:
     """Run the companion scheduler."""
     run_scheduler()
+
+
+@cli.command()
+def web() -> None:
+    """Run the web server."""
+    run_web_server()
