@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Any, Protocol
 
 import boto3  # type: ignore[import-untyped]
+from boto3.dynamodb.conditions import Key  # type: ignore[import-untyped]
 
 
 class LogStore(Protocol):
@@ -149,16 +150,35 @@ class DynamoLogStore:
         }
         self._table.put_item(Item=item)
 
-    def fetch_logs(self, _user_id: str, _since: datetime) -> list[dict[str, Any]]:
+    def fetch_logs(self, user_id: str, since: datetime) -> list[dict[str, Any]]:
         """Fetch log entries for a user since a given date.
 
         Args:
-            _user_id: The user identifier
-            _since: Fetch logs from this date onwards
+            user_id: The user identifier
+            since: Fetch logs from this date onwards
 
         Returns:
             List of log entries as dictionaries
 
         """
-        # TODO: Implement in Step 11
-        return []
+        # Generate partition key for the user
+        partition_key = self._generate_partition_key(user_id)
+
+        # Convert since datetime to ISO string for comparison
+        since_str = since.isoformat()
+        since_sort_key = self._generate_sort_key(since_str)
+
+        # Query DynamoDB for logs since the given date
+        response = self._table.query(KeyConditionExpression=Key('pk').eq(partition_key) & Key('sk').gte(since_sort_key))
+
+        # Extract items from response
+        items = response.get('Items', [])
+
+        # Filter items by timestamp (additional filtering beyond sort key)
+        filtered_items = []
+        for item in items:
+            item_timestamp = datetime.fromisoformat(item['timestamp'].replace('Z', '+00:00'))  # noqa: FURB162
+            if item_timestamp >= since:
+                filtered_items.append(item)
+
+        return filtered_items
