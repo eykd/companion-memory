@@ -211,12 +211,10 @@ mypy_path = "src"
 profile = "black"
 
 [dependency-groups]
-dev = [
-    "mypy>=1.16.1",
-]
 test = [
     "mypy>=1.16.1",
     "pytest>=8.4.1",
     "pytest-cov>=6.2.1",
     "pytest-randomly>=3.16.0",
+    "ruff>=0.12.2",
 ]
