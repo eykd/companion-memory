@@ -48,8 +48,12 @@ jobs:
 
   deploy:
     name: Deploy app
+    needs: ci
+    if: github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
-    concurrency: deploy-group    # optional: ensure only one action runs at a time
+    concurrency:
+      group: deploy
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
