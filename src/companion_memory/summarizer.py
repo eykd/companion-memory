@@ -1,7 +1,7 @@
 """Log summarization functionality using LLM."""
 
 from datetime import UTC, datetime, timedelta
-from typing import Protocol
+from typing import Any, Protocol
 
 from companion_memory.storage import LogStore
 
@@ -22,6 +22,38 @@ class LLMClient(Protocol):
         ...  # pragma: no cover
 
 
+def _format_log_entries(logs: list[dict[str, Any]]) -> str:
+    """Format log entries for inclusion in prompts.
+
+    Args:
+        logs: List of log entry dictionaries
+
+    Returns:
+        Formatted string with log entries
+
+    """
+    log_entries = [f'- {log["timestamp"]}: {log["text"]}' for log in logs]
+    return '\n'.join(log_entries)
+
+
+def _build_summary_prompt(logs_text: str, period: str) -> str:
+    """Build LLM prompt for summarizing logs.
+
+    Args:
+        logs_text: Formatted log entries text
+        period: Time period description (e.g., "past week")
+
+    Returns:
+        Complete prompt string
+
+    """
+    return f"""Please summarize the following work log entries from the {period}:
+
+{logs_text}
+
+Provide a concise summary of the main activities and themes."""
+
+
 def summarize_week(user_id: str, log_store: LogStore, llm: LLMClient) -> str:
     """Generate a summary of the user's logs from the past week.
 
@@ -40,15 +72,9 @@ def summarize_week(user_id: str, log_store: LogStore, llm: LLMClient) -> str:
     # Fetch logs from the past week
     logs = log_store.fetch_logs(user_id, since)
 
-    # Build prompt with logs
-    log_entries = [f'- {log["timestamp"]}: {log["text"]}' for log in logs]
-
-    logs_text = '\n'.join(log_entries)
-    prompt = f"""Please summarize the following work log entries from the past week:
-
-{logs_text}
-
-Provide a concise summary of the main activities and themes."""
+    # Format logs and build prompt
+    logs_text = _format_log_entries(logs)
+    prompt = _build_summary_prompt(logs_text, 'past week')
 
     # Generate summary using LLM
     return llm.complete(prompt)
