@@ -4,7 +4,7 @@ name: Fly Deploy
 on:
   push:
     branches:
-      - main
+      - master
 jobs:
   ci:
     # This workflow will install Python dependencies, run tests and
