@@ -47,7 +47,7 @@ When writing Python code (`*.py`), follow these testing practices:
 - Use descriptive names for test functions and methods.
 - Group related tests in test classes.
 - Use fixtures for complex setup.
-- Aim for 100% test coverage for code under `src/`.
+- Maintain 100% test coverage for code under `src/`.
 - When writing tests, move common fixtures to `tests/conftest.py`.
 - Run tests with `./scripts/runtests.sh` (which accepts normal `pytest` arguments and flags).
   - Example: `./scripts/runtests.sh tests/test_config_discovery.py`
@@ -127,3 +127,17 @@ When making any changes to the codebase:
   * Lint: `uv run ruff check --fix`
 * NEVER commit code that breaks existing tests unless it's part of an intentional RED step.
 * Run the full test suite with `./scripts/runtests.sh` to verify all tests pass before committing GREEN or REFACTOR changes.
+
+## 100% Test Coverage Maintenance
+
+When writing or modifying Python code (`*.py`), maintain 100% test coverage:
+
+- NEVER commit code that reduces test coverage below 100%.
+- Add tests for all new code paths before committing.
+- Use `# pragma: no cover` sparingly and only for:
+  - Protocol abstract methods (`...` in Protocol classes)
+  - TYPE_CHECKING import blocks
+  - Defensive code that should never execute in normal operation
+- When adding `# pragma: no cover`, include a comment explaining why coverage exclusion is justified.
+- Run `./scripts/runtests.sh --cov-report=term-missing` to verify 100% coverage before committing.
+- If coverage drops below 100%, either add tests or add appropriate pragma comments with justification.
