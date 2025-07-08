@@ -8,7 +8,8 @@
       "Bash(ls:*)",
       "Bash(uv run:*)",
       "Bash(uv run ruff check:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ],
     "deny": []
   }
