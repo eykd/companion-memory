@@ -95,7 +95,7 @@ class MemoryLogStore:
 class DynamoLogStore:
     """DynamoDB implementation of LogStore."""
 
-    def __init__(self, table_name: str = 'companion-memory-logs') -> None:
+    def __init__(self, table_name: str = 'CompanionMemory') -> None:
         """Initialize the DynamoDB log store.
 
         Args:
