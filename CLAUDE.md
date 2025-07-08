@@ -141,3 +141,20 @@ When writing or modifying Python code (`*.py`), maintain 100% test coverage:
 - When adding `# pragma: no cover`, include a comment explaining why coverage exclusion is justified.
 - Run `./scripts/runtests.sh --cov-report=term-missing` to verify 100% coverage before committing.
 - If coverage drops below 100%, either add tests or add appropriate pragma comments with justification.
+
+## TDD Development Process
+
+When implementing new features or making changes, follow this strict step-by-step process:
+
+- **RED**: Write a failing test that captures the desired behavior.
+- **LINT**: Run `uv run ruff format && uv run ruff check --fix` to fix any linting issues.
+- **GREEN**: Write the minimal code to make the test pass.
+- **LINT**: Run `uv run ruff format && uv run ruff check --fix` to fix any linting issues.
+- **TEST**: Run `./scripts/runtests.sh` to ensure all tests pass and coverage remains at 100%.
+- **COMMIT**: Commit the working implementation with a descriptive message.
+- **REFACTOR**: Improve the code quality and structure without changing behavior.
+- **LINT**: Run `uv run ruff format && uv run ruff check --fix` to fix any linting issues.
+- **TEST**: Run `./scripts/runtests.sh` to ensure all tests still pass and coverage remains at 100%.
+- **COMMIT**: Commit the refactored code with a descriptive message.
+- Never skip any step in this process.
+- Each commit should leave the codebase in a working, tested state.
