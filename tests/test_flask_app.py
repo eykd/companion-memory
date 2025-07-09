@@ -320,3 +320,45 @@ def test_lastweek_endpoint_with_valid_signature_returns_summary() -> None:
 
         # Verify LLM was called to generate summary
         mock_llm.complete.assert_called_once()
+
+
+def test_lastweek_endpoint_with_no_llm_returns_500() -> None:
+    """Test that /slack/lastweek endpoint returns 500 when LLM is not configured."""
+    import hashlib
+    import hmac
+    import os
+    from unittest.mock import MagicMock
+
+    # Set up test environment
+    test_secret = 'test_secret'  # noqa: S105
+    os.environ['SLACK_SIGNING_SECRET'] = test_secret
+
+    # Create test request data
+    request_body = 'user_id=U123456789&command=/lastweek'
+    request_timestamp = '1234567890'
+
+    # Create valid signature
+    sig_basestring = f'v0:{request_timestamp}:{request_body}'
+    expected_signature = (
+        'v0=' + hmac.new(test_secret.encode('utf-8'), sig_basestring.encode('utf-8'), hashlib.sha256).hexdigest()
+    )
+
+    # Mock the log store (but no LLM)
+    mock_log_store = MagicMock()
+
+    # Create app with log store but no LLM
+    app = create_app(log_store=mock_log_store, llm=None)
+    app.config['TESTING'] = True
+
+    with app.test_client() as client:
+        # Make request with valid signature
+        response = client.post(
+            '/slack/lastweek',
+            data=request_body,
+            headers={'X-Slack-Request-Timestamp': request_timestamp, 'X-Slack-Signature': expected_signature},
+            content_type='application/x-www-form-urlencoded',
+        )
+
+        # Verify response
+        assert response.status_code == 500
+        assert 'LLM not configured' in response.get_data(as_text=True)
