@@ -15,6 +15,8 @@ primary_region = 'sea'
   PORT = '8000'
   AWS_DEFAULT_REGION = 'us-west-2'
 
+[processes]
+  app = "python -m uv run gunicorn --bind :8000 --workers 2 companion_memory.wsgi"
 
 [http_service]
   internal_port = 8000
@@ -25,7 +27,10 @@ primary_region = 'sea'
   processes = ['app']
 
 [[vm]]
-  size = 'shared-cpu-1x'
+  memory = '512mb'
+  cpu_kind = 'shared'
+  cpus = 1
+  processes = ["app"]
 
 [[statics]]
   guest_path = '/code/static'
