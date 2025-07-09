@@ -145,3 +145,162 @@ def test_send_summary_message_combines_summaries_and_sends_slack() -> None:
     message_text = call_args[1]['text']
     assert 'Weekly summary: Focused on testing and development.' in message_text
     assert 'Daily summary: Attended meetings and completed code reviews.' in message_text
+
+
+def test_summarize_yesterday_with_timezone() -> None:
+    """Test that summarize_yesterday() fetches logs for yesterday in user's timezone."""
+    from unittest.mock import patch
+
+    # Mock log store
+    mock_log_store = MagicMock()
+
+    # Mock logs for yesterday
+    mock_logs = [
+        {
+            'user_id': 'U123456789',
+            'timestamp': '2024-01-15T10:00:00+00:00',
+            'text': 'Working on timezone handling',
+            'log_id': 'log-1',
+        },
+        {
+            'user_id': 'U123456789',
+            'timestamp': '2024-01-15T14:00:00+00:00',
+            'text': 'Testing date calculations',
+            'log_id': 'log-2',
+        },
+    ]
+    mock_log_store.fetch_logs.return_value = mock_logs
+
+    # Mock LLM client
+    mock_llm = MagicMock()
+    mock_llm.complete.return_value = 'Yesterday you focused on timezone handling and date calculations.'
+
+    # Mock Slack client for timezone discovery
+    mock_slack_client = MagicMock()
+    mock_slack_client.users_info.return_value = {'ok': True, 'user': {'tz': 'America/New_York', 'tz_offset': -18000}}
+
+    # Import the function we're testing
+    from companion_memory.summarizer import summarize_yesterday
+
+    # Test summarize_yesterday with timezone
+    with patch('companion_memory.summarizer._get_user_timezone') as mock_get_tz:
+        import zoneinfo
+
+        mock_get_tz.return_value = zoneinfo.ZoneInfo('America/New_York')
+        summary = summarize_yesterday(user_id='U123456789', log_store=mock_log_store, llm=mock_llm)
+
+    # Verify timezone function was called
+    mock_get_tz.assert_called_once_with('U123456789')
+
+    # Verify log store was called to fetch logs
+    mock_log_store.fetch_logs.assert_called_once()
+
+    # Verify LLM was called with appropriate prompt
+    mock_llm.complete.assert_called_once()
+
+    # Verify return value
+    assert summary == 'Yesterday you focused on timezone handling and date calculations.'
+
+
+def test_get_user_timezone_success() -> None:
+    """Test that _get_user_timezone returns correct timezone for valid user."""
+    from unittest.mock import MagicMock, patch
+
+    # Mock Slack client
+    mock_slack_client = MagicMock()
+    mock_slack_client.users_info.return_value = {'ok': True, 'user': {'tz': 'America/New_York'}}
+
+    # Import the helper function
+    from companion_memory.summarizer import _get_user_timezone
+
+    with patch('companion_memory.summarizer.get_slack_client', return_value=mock_slack_client):
+        timezone_result = _get_user_timezone('U123456789')
+
+    # Verify timezone is correct
+    import zoneinfo
+
+    assert isinstance(timezone_result, zoneinfo.ZoneInfo)
+    assert str(timezone_result) == 'America/New_York'
+
+    # Verify Slack client was called
+    mock_slack_client.users_info.assert_called_once_with(user='U123456789')
+
+
+def test_get_user_timezone_fallback_to_utc() -> None:
+    """Test that _get_user_timezone falls back to UTC when Slack API fails."""
+    from unittest.mock import MagicMock, patch
+
+    # Mock Slack client that fails
+    mock_slack_client = MagicMock()
+    mock_slack_client.users_info.return_value = {'ok': False}
+
+    # Import the helper function
+    from companion_memory.summarizer import _get_user_timezone
+
+    with patch('companion_memory.summarizer.get_slack_client', return_value=mock_slack_client):
+        timezone_result = _get_user_timezone('U123456789')
+
+    # Verify falls back to UTC
+    from datetime import UTC
+
+    assert timezone_result is UTC
+
+
+def test_get_user_timezone_invalid_timezone_fallback() -> None:
+    """Test that _get_user_timezone falls back to UTC for invalid timezone."""
+    from unittest.mock import MagicMock, patch
+
+    # Mock Slack client with invalid timezone
+    mock_slack_client = MagicMock()
+    mock_slack_client.users_info.return_value = {'ok': True, 'user': {'tz': 'Invalid/Timezone'}}
+
+    # Import the helper function
+    from companion_memory.summarizer import _get_user_timezone
+
+    with patch('companion_memory.summarizer.get_slack_client', return_value=mock_slack_client):
+        timezone_result = _get_user_timezone('U123456789')
+
+    # Verify falls back to UTC
+    from datetime import UTC
+
+    assert timezone_result is UTC
+
+
+def test_get_user_timezone_utc_string_returns_utc() -> None:
+    """Test that _get_user_timezone returns UTC for 'UTC' string."""
+    from unittest.mock import MagicMock, patch
+
+    # Mock Slack client with UTC timezone
+    mock_slack_client = MagicMock()
+    mock_slack_client.users_info.return_value = {'ok': True, 'user': {'tz': 'UTC'}}
+
+    # Import the helper function
+    from companion_memory.summarizer import _get_user_timezone
+
+    with patch('companion_memory.summarizer.get_slack_client', return_value=mock_slack_client):
+        timezone_result = _get_user_timezone('U123456789')
+
+    # Verify returns UTC
+    from datetime import UTC
+
+    assert timezone_result is UTC
+
+
+def test_get_user_timezone_exception_fallback() -> None:
+    """Test that _get_user_timezone falls back to UTC when exception occurs."""
+    from unittest.mock import MagicMock, patch
+
+    # Mock Slack client that raises exception
+    mock_slack_client = MagicMock()
+    mock_slack_client.users_info.side_effect = Exception('API Error')
+
+    # Import the helper function
+    from companion_memory.summarizer import _get_user_timezone
+
+    with patch('companion_memory.summarizer.get_slack_client', return_value=mock_slack_client):
+        timezone_result = _get_user_timezone('U123456789')
+
+    # Verify falls back to UTC
+    from datetime import UTC
+
+    assert timezone_result is UTC
