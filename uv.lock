@@ -12,6 +12,24 @@ wheels = [
 ]
 
 [[package]]
+name = "anthropic"
+version = "0.57.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "anyio" },
+    { name = "distro" },
+    { name = "httpx" },
+    { name = "jiter" },
+    { name = "pydantic" },
+    { name = "sniffio" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/d7/75/6261a1a8d92aed47e27d2fcfb3a411af73b1435e6ae1186da02b760565d0/anthropic-0.57.1.tar.gz", hash = "sha256:7815dd92245a70d21f65f356f33fc80c5072eada87fb49437767ea2918b2c4b0", size = 423775, upload-time = "2025-07-03T16:57:35.932Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e5/cf/ca0ba77805aec6171629a8b665c7dc224dab374539c3d27005b5d8c100a0/anthropic-0.57.1-py3-none-any.whl", hash = "sha256:33afc1f395af207d07ff1bffc0a3d1caac53c371793792569c5d2f09283ea306", size = 292779, upload-time = "2025-07-03T16:57:34.636Z" },
+]
+
+[[package]]
 name = "anyio"
 version = "4.9.0"
 source = { registry = "https://pypi.org/simple" }
@@ -135,6 +153,7 @@ dependencies = [
     { name = "flask" },
     { name = "gunicorn" },
     { name = "llm" },
+    { name = "llm-anthropic" },
     { name = "python-dotenv" },
     { name = "sentry-sdk", extra = ["flask"] },
     { name = "slack-sdk" },
@@ -160,6 +179,7 @@ requires-dist = [
     { name = "flask", specifier = ">=3.1.1" },
     { name = "gunicorn", specifier = ">=23.0.0" },
     { name = "llm", specifier = ">=0.26" },
+    { name = "llm-anthropic", specifier = ">=0.1.0" },
     { name = "python-dotenv", specifier = ">=1.1.1" },
     { name = "sentry-sdk", extras = ["flask"], specifier = ">=2.32.0" },
     { name = "slack-sdk", specifier = ">=3.35.0" },
@@ -460,6 +480,19 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/4e/88/1acdae8cc6122d3ab2d3d30477d3273608f92177a6bb17ab98881af65627/llm-0.26.tar.gz", hash = "sha256:c2e9ddbc582da10c61112c0f983383fa0dc7bee3ca7d6f2ade1a2d003771eb1b", size = 82037, upload-time = "2025-05-27T20:36:22.891Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/da/5f/ed9d5c47c46632f2c3a844c14412f434bc1263faa4890306b5f911cd3aaf/llm-0.26-py3-none-any.whl", hash = "sha256:93dc331facbfb909f946df8812fb1d627ec9ce764aab2ebd29f9011ed647339c", size = 79376, upload-time = "2025-05-27T20:36:21.341Z" },
+]
+
+[[package]]
+name = "llm-anthropic"
+version = "0.17"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "anthropic" },
+    { name = "llm" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/81/91/db3c098032ed10c7808e3288b764c39c96be1f4cd67a948bdfca098a867a/llm_anthropic-0.17.tar.gz", hash = "sha256:2f5e1ab5b7eb9a84b8d07473a8697088b659fd4f1941d96863cf18cf8cfb9eb0", size = 16179, upload-time = "2025-05-27T20:43:59.208Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/1b/fb/b45ac51677c2ab64b0660bd0df496f52c7650491d888120bbd19061c8e93/llm_anthropic-0.17-py3-none-any.whl", hash = "sha256:00cc7df6219007d772991070be6ec38944c6ce94c26952821d6c5f4683f34dc8", size = 13641, upload-time = "2025-05-27T20:43:58.076Z" },
 ]
 
 [[package]]

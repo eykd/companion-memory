@@ -14,6 +14,7 @@ dependencies = [
     "flask>=3.1.1",
     "gunicorn>=23.0.0",
     "llm>=0.26",
+    "llm-anthropic>=0.1.0",
     "python-dotenv>=1.1.1",
     "sentry-sdk[flask]>=2.32.0",
     "slack-sdk>=3.35.0",

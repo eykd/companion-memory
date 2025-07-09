@@ -10,7 +10,8 @@
       "Bash(uv run ruff check:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(uv sync:*)"
+      "Bash(uv sync:*)",
+      "WebFetch(domain:llm.datasette.io)"
     ],
     "deny": []
   }
