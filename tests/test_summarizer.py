@@ -304,3 +304,58 @@ def test_get_user_timezone_exception_fallback() -> None:
     from datetime import UTC
 
     assert timezone_result is UTC
+
+
+def test_summarize_today_with_timezone() -> None:
+    """Test that summarize_today() fetches logs for today in user's timezone."""
+    from unittest.mock import patch
+
+    # Mock log store
+    mock_log_store = MagicMock()
+
+    # Mock logs for today
+    mock_logs = [
+        {
+            'user_id': 'U123456789',
+            'timestamp': '2024-01-15T10:00:00+00:00',
+            'text': 'Working on implementing new features',
+            'log_id': 'log-1',
+        },
+        {
+            'user_id': 'U123456789',
+            'timestamp': '2024-01-15T14:00:00+00:00',
+            'text': 'Testing timezone functionality',
+            'log_id': 'log-2',
+        },
+    ]
+    mock_log_store.fetch_logs.return_value = mock_logs
+
+    # Mock LLM client
+    mock_llm = MagicMock()
+    mock_llm.complete.return_value = 'Today you are working on implementing new features and testing.'
+
+    # Import the function we're testing
+    from companion_memory.summarizer import summarize_today
+
+    # Test summarize_today with timezone
+    with patch('companion_memory.summarizer._get_user_timezone') as mock_get_tz:
+        import zoneinfo
+
+        mock_get_tz.return_value = zoneinfo.ZoneInfo('America/New_York')
+        summary = summarize_today(user_id='U123456789', log_store=mock_log_store, llm=mock_llm)
+
+    # Verify timezone function was called
+    mock_get_tz.assert_called_once_with('U123456789')
+
+    # Verify log store was called to fetch logs
+    mock_log_store.fetch_logs.assert_called_once()
+
+    # Verify LLM was called with appropriate prompt
+    mock_llm.complete.assert_called_once()
+    llm_call_args = mock_llm.complete.call_args[0][0]
+    assert 'Working on implementing new features' in llm_call_args
+    assert 'Testing timezone functionality' in llm_call_args
+    assert 'today' in llm_call_args  # Should use "today" in prompt
+
+    # Verify return value
+    assert summary == 'Today you are working on implementing new features and testing.'

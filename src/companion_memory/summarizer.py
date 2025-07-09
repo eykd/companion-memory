@@ -145,6 +145,48 @@ def _get_user_timezone(user_id: str) -> timezone | zoneinfo.ZoneInfo:
         return UTC
 
 
+def _summarize_timezone_aware_day(
+    user_id: str, log_store: LogStore, llm: LLMClient, days_offset: int, period_name: str
+) -> str:
+    """Generate a summary of the user's logs from a specific day in their timezone.
+
+    Discovers the user's timezone via Slack's users_info API, then calculates
+    the target day's date range in that timezone and fetches logs accordingly.
+
+    Args:
+        user_id: The user identifier
+        log_store: Storage implementation for fetching logs
+        llm: LLM client for generating summaries
+        days_offset: Number of days to offset from today (0=today, 1=yesterday, etc.)
+        period_name: Human-readable period description for the prompt
+
+    Returns:
+        Generated summary text
+
+    """
+    # Get user's timezone
+    user_tz = _get_user_timezone(user_id)
+
+    # Get current time in user's timezone
+    now_user_tz = datetime.now(user_tz)
+
+    # Calculate target day's start time in user's timezone
+    target_day_start = now_user_tz.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=days_offset)
+
+    # Convert to UTC for storage query
+    target_day_start_utc = target_day_start.astimezone(UTC)
+
+    # Fetch logs from target day
+    logs = log_store.fetch_logs(user_id, target_day_start_utc)
+
+    # Format logs and build prompt
+    logs_text = _format_log_entries(logs)
+    prompt = _build_summary_prompt(logs_text, period_name)
+
+    # Generate summary using LLM
+    return llm.complete(prompt)
+
+
 def summarize_yesterday(user_id: str, log_store: LogStore, llm: LLMClient) -> str:
     """Generate a summary of the user's logs from yesterday in their timezone.
 
@@ -160,29 +202,25 @@ def summarize_yesterday(user_id: str, log_store: LogStore, llm: LLMClient) -> st
         Generated summary text
 
     """
-    # Get user's timezone
-    user_tz = _get_user_timezone(user_id)
+    return _summarize_timezone_aware_day(user_id, log_store, llm, days_offset=1, period_name='yesterday')
 
-    # Get current time in user's timezone
-    now_user_tz = datetime.now(user_tz)
 
-    # Calculate yesterday's start time in user's timezone
-    yesterday_start = now_user_tz.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=1)
+def summarize_today(user_id: str, log_store: LogStore, llm: LLMClient) -> str:
+    """Generate a summary of the user's logs from today in their timezone.
 
-    # Convert to UTC for storage query
-    yesterday_start_utc = yesterday_start.astimezone(UTC)
+    Discovers the user's timezone via Slack's users_info API, then calculates
+    today's date range in that timezone and fetches logs accordingly.
 
-    # Fetch logs from yesterday
-    logs = log_store.fetch_logs(user_id, yesterday_start_utc)
+    Args:
+        user_id: The user identifier
+        log_store: Storage implementation for fetching logs
+        llm: LLM client for generating summaries
 
-    # Format logs and build prompt
-    # Note: In a real implementation, we might want to filter logs here, but
-    # for now we trust that fetch_logs returns the correct date range
-    logs_text = _format_log_entries(logs)
-    prompt = _build_summary_prompt(logs_text, 'yesterday')
+    Returns:
+        Generated summary text
 
-    # Generate summary using LLM
-    return llm.complete(prompt)
+    """
+    return _summarize_timezone_aware_day(user_id, log_store, llm, days_offset=0, period_name='today')
 
 
 def _format_summary_message(weekly_summary: str, daily_summary: str) -> str:

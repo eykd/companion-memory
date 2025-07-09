@@ -8,7 +8,7 @@ from flask import Flask, request
 
 from companion_memory.slack_auth import validate_slack_signature
 from companion_memory.storage import LogStore, MemoryLogStore
-from companion_memory.summarizer import LLMClient, summarize_week, summarize_yesterday
+from companion_memory.summarizer import LLMClient, summarize_today, summarize_week, summarize_yesterday
 
 
 def get_log_store() -> LogStore:
@@ -174,6 +174,36 @@ def create_app(log_store: LogStore | None = None, llm: LLMClient | None = None) 
             return 'LLM not configured', 500
 
         summary = summarize_yesterday(user_id=user_id, log_store=log_store, llm=llm)
+
+        return summary, 200
+
+    @app.route('/slack/today', methods=['POST'])
+    def today_summary() -> tuple[str, int]:
+        """Handle Slack /today command.
+
+        Returns:
+            Response tuple with summary message and status code
+
+        """
+        # Get signature validation headers
+        timestamp = request.headers.get('X-Slack-Request-Timestamp', '')
+        signature = request.headers.get('X-Slack-Signature', '')
+
+        # Validate signature
+        if not validate_slack_signature(request.get_data(), timestamp, signature):
+            return 'Invalid signature', 403
+
+        # Parse the request data
+        request_data = parse_qs(request.get_data(as_text=True))
+
+        # Extract user ID
+        user_id = request_data.get('user_id', [''])[0]
+
+        # Generate today summary
+        if llm is None:
+            return 'LLM not configured', 500
+
+        summary = summarize_today(user_id=user_id, log_store=log_store, llm=llm)
 
         return summary, 200
 

@@ -1,6 +1,6 @@
 """Storage interfaces and implementations for log data."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Protocol
 
 import boto3  # type: ignore[import-untyped]
@@ -85,8 +85,8 @@ class MemoryLogStore:
             # Parse the ISO timestamp string
             log_timestamp = datetime.fromisoformat(log_entry['timestamp'].replace('Z', '+00:00'))  # noqa: FURB162
 
-            # Filter logs that are at or after the 'since' datetime
-            if log_timestamp >= since:
+            # Filter logs that are at or after the 'since' datetime (ensure both are timezone-aware for comparison)
+            if log_timestamp.astimezone(UTC) >= since.astimezone(UTC):
                 filtered_logs.append(log_entry)
 
         return filtered_logs
@@ -194,7 +194,8 @@ class DynamoLogStore:
         filtered_items = []
         for item in items:
             item_timestamp = datetime.fromisoformat(item['timestamp'].replace('Z', '+00:00'))  # noqa: FURB162
-            if item_timestamp >= since:
+            # Ensure both timestamps are timezone-aware for comparison
+            if item_timestamp.astimezone(UTC) >= since.astimezone(UTC):
                 filtered_items.append(item)
 
         return filtered_items
