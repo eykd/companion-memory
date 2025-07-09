@@ -141,8 +141,8 @@ class DynamoLogStore:
 
         """
         item = {
-            'pk': self._generate_partition_key(user_id),
-            'sk': self._generate_sort_key(timestamp),
+            'PK': self._generate_partition_key(user_id),
+            'SK': self._generate_sort_key(timestamp),
             'user_id': user_id,
             'timestamp': timestamp,
             'text': text,
@@ -173,7 +173,7 @@ class DynamoLogStore:
         last_evaluated_key = None
 
         while True:
-            query_kwargs = {'KeyConditionExpression': Key('pk').eq(partition_key) & Key('sk').gte(since_sort_key)}
+            query_kwargs = {'KeyConditionExpression': Key('PK').eq(partition_key) & Key('SK').gte(since_sort_key)}
 
             if last_evaluated_key:
                 query_kwargs['ExclusiveStartKey'] = last_evaluated_key

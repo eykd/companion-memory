@@ -14,10 +14,6 @@ sentry_sdk.init(
     send_default_pii=True,
 )
 
-
-# Create appropriate log store based on environment
-if os.getenv('USE_DYNAMODB', '').lower() == 'true':
-    log_store = DynamoLogStore()
-    application = create_app(log_store=log_store)
-else:
-    application = create_app()
+# Production WSGI uses DynamoDB by default
+log_store = DynamoLogStore()
+application = create_app(log_store=log_store)
