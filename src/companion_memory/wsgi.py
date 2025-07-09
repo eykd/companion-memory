@@ -5,6 +5,7 @@ import os
 import sentry_sdk
 
 from companion_memory.app import create_app
+from companion_memory.llm_client import LLMLClient
 from companion_memory.storage import DynamoLogStore
 
 sentry_sdk.init(
@@ -14,6 +15,7 @@ sentry_sdk.init(
     send_default_pii=True,
 )
 
-# Production WSGI uses DynamoDB by default
+# Production WSGI uses DynamoDB and LLM by default
 log_store = DynamoLogStore()
-application = create_app(log_store=log_store)
+llm_client = LLMLClient()
+application = create_app(log_store=log_store, llm=llm_client)
