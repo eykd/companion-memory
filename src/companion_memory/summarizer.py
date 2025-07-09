@@ -1,5 +1,6 @@
 """Log summarization functionality using LLM."""
 
+from textwrap import dedent
 import zoneinfo
 from datetime import UTC, datetime, timedelta, timezone
 from typing import Any, Protocol
@@ -49,11 +50,27 @@ def _build_summary_prompt(logs_text: str, period: str) -> str:
         Complete prompt string
 
     """
-    return f"""Please summarize the following work log entries from the {period}:
+    return dedent(
+        f"""
+        You will be acting in the role of an executive assistant for an important executive with limited time.
 
-{logs_text}
+        Your executive has tasked you with summarizing the executive's work log entries from the {period}.
 
-Provide a concise summary of the main activities and themes."""
+        Here are the log entries:
+
+        <log-entries>
+        {logs_text}
+        </log-entries>
+
+        Using these log entries, provide a concise summary of the main activities and themes.
+        - Instead of specific times, refer to general times of the day.
+        - Include any relevant metrics or insights that are relevant to the executive's work.
+        - Use the second person (you), as if you were addressing the executive directly in conversation.
+        - Do not include a preamble, address, or salutation.
+        - Do not invite the executive to respond or follow up.
+        - Do not include any other text than the summary.
+"""
+    )
 
 
 def _summarize_period(user_id: str, log_store: LogStore, llm: LLMClient, days: int, period_name: str) -> str:
@@ -202,7 +219,7 @@ def summarize_yesterday(user_id: str, log_store: LogStore, llm: LLMClient) -> st
         Generated summary text
 
     """
-    return _summarize_timezone_aware_day(user_id, log_store, llm, days_offset=1, period_name='yesterday')
+    return _summarize_timezone_aware_day(user_id, log_store, llm, days_offset=1, period_name='day before')
 
 
 def summarize_today(user_id: str, log_store: LogStore, llm: LLMClient) -> str:
@@ -234,13 +251,17 @@ def _format_summary_message(weekly_summary: str, daily_summary: str) -> str:
         Formatted message text
 
     """
-    return f"""Here's your activity summary:
+    return dedent(
+        f"""
+        Here's your activity summary:
 
-**This Week:**
-{weekly_summary}
+        **This Week:**
+        {weekly_summary}
 
-**Today:**
-{daily_summary}"""
+        **Today:**
+        {daily_summary}
+        """
+    )
 
 
 def send_summary_message(user_id: str, log_store: LogStore, llm: LLMClient) -> None:

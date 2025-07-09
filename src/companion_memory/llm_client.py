@@ -21,7 +21,7 @@ class LLMLClient:
                        LLM_MODEL_NAME or defaults to Claude 3.5 Haiku.
 
         """
-        self._model_name = model_name or os.getenv('LLM_MODEL_NAME', 'claude-3-5-haiku')
+        self._model_name = model_name or os.getenv('LLM_MODEL_NAME', 'anthropic/claude-3-haiku-20240307')
         logger.info('Initializing LLM client with model: %s', self._model_name)
 
     def complete(self, prompt: str) -> str:
