@@ -164,8 +164,9 @@ class DynamoLogStore:
         # Generate partition key for the user
         partition_key = self._generate_partition_key(user_id)
 
-        # Convert since datetime to ISO string for comparison
-        since_str = since.isoformat()
+        # Convert since datetime to UTC, then to ISO string for comparison
+        since_utc = since.astimezone(UTC)
+        since_str = since_utc.isoformat()
         since_sort_key = self._generate_sort_key(since_str)
 
         # Query DynamoDB for logs since the given date with pagination support
