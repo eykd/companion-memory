@@ -359,3 +359,27 @@ def test_summarize_today_with_timezone() -> None:
 
     # Verify return value
     assert summary == 'Today you are working on implementing new features and testing.'
+
+
+def test_format_log_entries_with_no_timezone_defaults_to_utc() -> None:
+    """Test that _format_log_entries defaults to UTC when no timezone is provided."""
+    from companion_memory.summarizer import _format_log_entries
+
+    # Mock logs with UTC timestamps
+    mock_logs = [
+        {
+            'timestamp': '2024-01-15T10:00:00+00:00',
+            'text': 'Working on tests',
+        },
+        {
+            'timestamp': '2024-01-15T14:00:00+00:00',
+            'text': 'Debugging code',
+        },
+    ]
+
+    # Call _format_log_entries without timezone (should default to UTC)
+    result = _format_log_entries(mock_logs)
+
+    # Verify timestamps are formatted in UTC
+    assert '2024-01-15 10:00:00: Working on tests' in result
+    assert '2024-01-15 14:00:00: Debugging code' in result

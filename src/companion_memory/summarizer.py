@@ -25,17 +25,29 @@ class LLMClient(Protocol):
         ...  # pragma: no cover
 
 
-def _format_log_entries(logs: list[dict[str, Any]]) -> str:
+def _format_log_entries(logs: list[dict[str, Any]], user_tz: timezone | zoneinfo.ZoneInfo | None = None) -> str:
     """Format log entries for inclusion in prompts.
 
     Args:
         logs: List of log entry dictionaries
+        user_tz: User's timezone for timestamp conversion (defaults to UTC)
 
     Returns:
         Formatted string with log entries
 
     """
-    log_entries = [f'- {log["timestamp"]}: {log["text"]}' for log in logs]
+    if user_tz is None:
+        user_tz = UTC
+
+    log_entries = []
+    for log in logs:
+        # Parse UTC timestamp and convert to user timezone
+        utc_timestamp = datetime.fromisoformat(log['timestamp'])
+        user_timestamp = utc_timestamp.astimezone(user_tz)
+        # Format timestamp in user's timezone (show date and time)
+        formatted_timestamp = user_timestamp.strftime('%Y-%m-%d %H:%M:%S')
+        log_entries.append(f'- {formatted_timestamp}: {log["text"]}')
+
     return '\n'.join(log_entries)
 
 
@@ -87,6 +99,9 @@ def _summarize_period(user_id: str, log_store: LogStore, llm: LLMClient, days: i
         Generated summary text
 
     """
+    # Get user's timezone for timestamp formatting
+    user_tz = _get_user_timezone(user_id)
+
     # Calculate date N days ago
     since = datetime.now(UTC) - timedelta(days=days)
 
@@ -94,7 +109,7 @@ def _summarize_period(user_id: str, log_store: LogStore, llm: LLMClient, days: i
     logs = log_store.fetch_logs(user_id, since)
 
     # Format logs and build prompt
-    logs_text = _format_log_entries(logs)
+    logs_text = _format_log_entries(logs, user_tz)
     prompt = _build_summary_prompt(logs_text, period_name)
 
     # Generate summary using LLM
@@ -197,7 +212,7 @@ def _summarize_timezone_aware_day(
     logs = log_store.fetch_logs(user_id, target_day_start_utc)
 
     # Format logs and build prompt
-    logs_text = _format_log_entries(logs)
+    logs_text = _format_log_entries(logs, user_tz)
     prompt = _build_summary_prompt(logs_text, period_name)
 
     # Generate summary using LLM
