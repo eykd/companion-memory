@@ -12,7 +12,8 @@
       "Bash(git commit:*)",
       "Bash(uv sync:*)",
       "WebFetch(domain:llm.datasette.io)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(rg:*)"
     ],
     "deny": []
   }
