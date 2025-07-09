@@ -69,3 +69,60 @@ def test_cli_web_command_with_options() -> None:
     assert result.exit_code == 0
     mock_create_app.assert_called_once()
     mock_app.run.assert_called_once_with(host='0.0.0.0', port=8080, debug=False)  # noqa: S104
+
+
+def test_cli_slack_test_command_exists() -> None:
+    """Test that CLI has a slack-test command."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ['slack-test', '--help'])
+
+    assert result.exit_code == 0
+    assert 'slack-test' in result.output
+    assert 'Test Slack connection' in result.output
+
+
+def test_cli_slack_test_command_success() -> None:
+    """Test that CLI slack-test command succeeds with valid connection."""
+    from unittest.mock import patch
+
+    runner = CliRunner()
+    with patch('companion_memory.cli.test_slack_connection') as mock_test:
+        mock_test.return_value = True
+        result = runner.invoke(cli, ['slack-test'])
+
+    assert result.exit_code == 0
+    assert 'Testing Slack connection...' in result.output
+    assert '✅ Slack connection successful!' in result.output
+    assert 'Test message sent to Slack user.' in result.output
+    mock_test.assert_called_once()
+
+
+def test_cli_slack_test_command_failure() -> None:
+    """Test that CLI slack-test command fails with invalid connection."""
+    from unittest.mock import patch
+
+    runner = CliRunner()
+    with patch('companion_memory.cli.test_slack_connection') as mock_test:
+        mock_test.return_value = False
+        result = runner.invoke(cli, ['slack-test'])
+
+    assert result.exit_code == 1
+    assert 'Testing Slack connection...' in result.output
+    assert '❌ Slack connection failed!' in result.output
+    assert 'Check the logs for detailed error information.' in result.output
+    mock_test.assert_called_once()
+
+
+def test_cli_slack_test_command_with_user_id() -> None:
+    """Test that CLI slack-test command accepts user ID option."""
+    from unittest.mock import patch
+
+    runner = CliRunner()
+    with patch('companion_memory.cli.test_slack_connection') as mock_test:
+        mock_test.return_value = True
+        result = runner.invoke(cli, ['slack-test', '--user-id', 'U123456'])
+
+    assert result.exit_code == 0
+    assert 'Testing Slack connection...' in result.output
+    assert '✅ Slack connection successful!' in result.output
+    mock_test.assert_called_once_with('U123456')
