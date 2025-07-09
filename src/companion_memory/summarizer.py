@@ -1,8 +1,8 @@
 """Log summarization functionality using LLM."""
 
-from textwrap import dedent
 import zoneinfo
 from datetime import UTC, datetime, timedelta, timezone
+from textwrap import dedent
 from typing import Any, Protocol
 
 from companion_memory.scheduler import get_slack_client

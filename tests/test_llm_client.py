@@ -36,7 +36,7 @@ def test_llm_client_complete_generates_response_with_claude_haiku(mock_llm_modul
         result = client.complete('Test prompt')
 
         # Verify model was requested correctly
-        mock_llm_module.get_model.assert_called_once_with('claude-3-5-haiku')
+        mock_llm_module.get_model.assert_called_once_with('anthropic/claude-3-haiku-20240307')
 
         # Verify prompt was sent
         mock_model.prompt.assert_called_once_with('Test prompt')
@@ -53,7 +53,7 @@ def test_llm_client_complete_handles_unknown_model_error(mock_llm_module: MagicM
     with patch('companion_memory.llm_client.llm', mock_llm_module):
         client = LLMLClient()
 
-        with pytest.raises(LLMConfigurationError, match='Unknown model: claude-3-5-haiku'):
+        with pytest.raises(LLMConfigurationError, match='Unknown model: anthropic/claude-3-haiku-20240307'):
             client.complete('Test prompt')
 
 
@@ -64,7 +64,7 @@ def test_llm_client_complete_handles_model_configuration_error(mock_llm_module: 
     with patch('companion_memory.llm_client.llm', mock_llm_module):
         client = LLMLClient()
 
-        with pytest.raises(LLMConfigurationError, match='Error getting model claude-3-5-haiku'):
+        with pytest.raises(LLMConfigurationError, match='Error getting model anthropic/claude-3-haiku-20240307'):
             client.complete('Test prompt')
 
 
