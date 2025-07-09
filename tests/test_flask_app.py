@@ -262,3 +262,61 @@ def test_create_app_accepts_injected_log_store(client: 'FlaskClient') -> None:
 
     # Verify that the app was created successfully
     assert app is not None
+
+
+def test_lastweek_endpoint_with_invalid_signature_returns_403(client: 'FlaskClient') -> None:
+    """Test that /slack/lastweek endpoint returns 403 for invalid signature."""
+    response = client.post('/slack/lastweek', data={'user_id': 'U123456789', 'command': '/lastweek'})
+    assert response.status_code == 403
+
+
+def test_lastweek_endpoint_with_valid_signature_returns_summary() -> None:
+    """Test that /slack/lastweek endpoint returns weekly summary for valid signature."""
+    import hashlib
+    import hmac
+    import os
+    from unittest.mock import MagicMock
+
+    # Set up test environment
+    test_secret = 'test_secret'  # noqa: S105
+    os.environ['SLACK_SIGNING_SECRET'] = test_secret
+
+    # Create test request data
+    request_body = 'user_id=U123456789&command=/lastweek'
+    request_timestamp = '1234567890'
+
+    # Create valid signature
+    sig_basestring = f'v0:{request_timestamp}:{request_body}'
+    expected_signature = (
+        'v0=' + hmac.new(test_secret.encode('utf-8'), sig_basestring.encode('utf-8'), hashlib.sha256).hexdigest()
+    )
+
+    # Mock the dependencies
+    mock_log_store = MagicMock()
+    mock_llm = MagicMock()
+    mock_llm.complete.return_value = 'This week you focused on testing, debugging, and code review activities.'
+
+    # Create app with injected dependencies
+    app = create_app(log_store=mock_log_store, llm=mock_llm)
+    app.config['TESTING'] = True
+
+    with app.test_client() as client:
+        # Make request with valid signature
+        response = client.post(
+            '/slack/lastweek',
+            data=request_body,
+            headers={'X-Slack-Request-Timestamp': request_timestamp, 'X-Slack-Signature': expected_signature},
+            content_type='application/x-www-form-urlencoded',
+        )
+
+        # Verify response
+        assert response.status_code == 200
+        assert 'This week you focused on testing, debugging, and code review activities.' in response.get_data(
+            as_text=True
+        )
+
+        # Verify log store was called to fetch logs
+        mock_log_store.fetch_logs.assert_called_once()
+
+        # Verify LLM was called to generate summary
+        mock_llm.complete.assert_called_once()
