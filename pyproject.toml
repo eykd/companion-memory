@@ -199,18 +199,33 @@ omit = [
 show_missing = true
 
 [tool.mypy]
-# Python type checking
-# https://www.mypy-lang.org/
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
 strict = true
 plugins = []
 mypy_path = "src"
 
-
-
-[tool.isort]
-# Python import sorter
-# https://pycqa.github.io/isort/
-profile = "black"
+[[tool.mypy.overrides]]
+module = [
+    "boto3.*",
+    "botocore.*",
+    "slack_sdk.*",
+    "apscheduler.*",
+    "llm.*",
+    "sentry_sdk.*",
+]
+ignore_missing_imports = true
 
 [dependency-groups]
 dev = [

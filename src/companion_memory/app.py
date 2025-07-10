@@ -2,10 +2,12 @@
 
 import uuid
 from datetime import UTC, datetime
+from typing import Any
 from urllib.parse import parse_qs
 
 from flask import Flask, request
 
+from companion_memory.scheduler import get_scheduler
 from companion_memory.slack_auth import validate_slack_signature
 from companion_memory.storage import LogStore, MemoryLogStore
 from companion_memory.summarizer import LLMClient, summarize_today, summarize_week, summarize_yesterday
@@ -38,6 +40,22 @@ def create_app(log_store: LogStore | None = None, llm: LLMClient | None = None) 
     if log_store is None:
         log_store = get_log_store()
 
+    # Initialize distributed scheduler (coordinates across workers/containers via DynamoDB)
+    scheduler = get_scheduler()
+    if scheduler.start():
+        # This worker won the race to run the scheduler
+        app.logger.info('Distributed scheduler started successfully in this worker')
+
+        # Add scheduled jobs here
+
+        # Register cleanup on app teardown
+        @app.teardown_appcontext  # type: ignore[type-var]
+        def cleanup_scheduler(exc: Exception | None) -> None:  # noqa: ARG001
+            scheduler.shutdown()
+
+    else:
+        app.logger.info('Scheduler already running in another worker/container')
+
     @app.route('/')
     def healthcheck() -> str:
         """Health check endpoint.
@@ -47,6 +65,16 @@ def create_app(log_store: LogStore | None = None, llm: LLMClient | None = None) 
 
         """
         return 'OK'
+
+    @app.route('/scheduler/status')
+    def scheduler_status() -> dict[str, Any]:
+        """Get scheduler status for monitoring.
+
+        Returns:
+            JSON with scheduler status information
+
+        """
+        return scheduler.get_status()
 
     @app.route('/fail')
     def fail() -> str:
