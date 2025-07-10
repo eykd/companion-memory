@@ -14,7 +14,7 @@ if TYPE_CHECKING:  # pragma: no cover
 @pytest.fixture
 def client() -> Generator['FlaskClient', None, None]:
     """Create a test client for the Flask app."""
-    app = create_app()
+    app = create_app(enable_scheduler=False)
     app.config['TESTING'] = True
     with app.test_client() as client:
         yield client
@@ -97,7 +97,7 @@ def test_log_endpoint_stores_entry_with_valid_signature() -> None:
     mock_store = MagicMock()
 
     # Create app with injected mock log store
-    app = create_app(log_store=mock_store)
+    app = create_app(log_store=mock_store, enable_scheduler=False)
     app.config['TESTING'] = True
 
     with app.test_client() as client:
@@ -147,7 +147,7 @@ def test_log_endpoint_handles_sampling_responses() -> None:
     mock_store = MagicMock()
 
     # Create app with injected mock log store
-    app = create_app(log_store=mock_store)
+    app = create_app(log_store=mock_store, enable_scheduler=False)
     app.config['TESTING'] = True
 
     with app.test_client() as client:
@@ -257,7 +257,7 @@ def test_create_app_accepts_injected_log_store(client: 'FlaskClient') -> None:
     mock_log_store = MagicMock()
 
     # Create app with injected log store
-    app = create_app(log_store=mock_log_store)
+    app = create_app(log_store=mock_log_store, enable_scheduler=False)
     app.config['TESTING'] = True
 
     # Verify that the app was created successfully
@@ -297,7 +297,7 @@ def test_lastweek_endpoint_with_valid_signature_returns_summary() -> None:
     mock_llm.complete.return_value = 'This week you focused on testing, debugging, and code review activities.'
 
     # Create app with injected dependencies
-    app = create_app(log_store=mock_log_store, llm=mock_llm)
+    app = create_app(log_store=mock_log_store, llm=mock_llm, enable_scheduler=False)
     app.config['TESTING'] = True
 
     with app.test_client() as client:
@@ -347,7 +347,7 @@ def test_lastweek_endpoint_with_no_llm_returns_500() -> None:
     mock_log_store = MagicMock()
 
     # Create app with log store but no LLM
-    app = create_app(log_store=mock_log_store, llm=None)
+    app = create_app(log_store=mock_log_store, llm=None, enable_scheduler=False)
     app.config['TESTING'] = True
 
     with app.test_client() as client:
@@ -402,7 +402,7 @@ def test_yesterday_endpoint_with_valid_signature_returns_summary() -> None:
     mock_slack_client.users_info.return_value = {'ok': True, 'user': {'tz': 'America/New_York', 'tz_offset': -18000}}
 
     # Create app with injected dependencies
-    app = create_app(log_store=mock_log_store, llm=mock_llm)
+    app = create_app(log_store=mock_log_store, llm=mock_llm, enable_scheduler=False)
     app.config['TESTING'] = True
 
     with (
@@ -461,7 +461,7 @@ def test_yesterday_endpoint_with_no_llm_returns_500() -> None:
     mock_log_store = MagicMock()
 
     # Create app with log store but no LLM
-    app = create_app(log_store=mock_log_store, llm=None)
+    app = create_app(log_store=mock_log_store, llm=None, enable_scheduler=False)
     app.config['TESTING'] = True
 
     with app.test_client() as client:
@@ -510,7 +510,7 @@ def test_yesterday_endpoint_with_timezone_discovery() -> None:
     mock_llm.complete.return_value = 'Yesterday you focused on timezone handling and date calculations.'
 
     # Create app with injected dependencies
-    app = create_app(log_store=mock_log_store, llm=mock_llm)
+    app = create_app(log_store=mock_log_store, llm=mock_llm, enable_scheduler=False)
     app.config['TESTING'] = True
 
     with (
@@ -577,7 +577,7 @@ def test_today_endpoint_with_valid_signature_returns_summary() -> None:
     mock_llm.complete.return_value = 'Today you are focusing on implementing new features and testing.'
 
     # Create app with injected dependencies
-    app = create_app(log_store=mock_log_store, llm=mock_llm)
+    app = create_app(log_store=mock_log_store, llm=mock_llm, enable_scheduler=False)
     app.config['TESTING'] = True
 
     with (
@@ -636,7 +636,7 @@ def test_today_endpoint_with_no_llm_returns_500() -> None:
     mock_log_store = MagicMock()
 
     # Create app with log store but no LLM
-    app = create_app(log_store=mock_log_store, llm=None)
+    app = create_app(log_store=mock_log_store, llm=None, enable_scheduler=False)
     app.config['TESTING'] = True
 
     with app.test_client() as client:
@@ -680,7 +680,7 @@ def test_today_endpoint_with_timezone_discovery() -> None:
     mock_llm.complete.return_value = 'Today you worked on various tasks and made good progress.'
 
     # Create app with injected dependencies
-    app = create_app(log_store=mock_store, llm=mock_llm)
+    app = create_app(log_store=mock_store, llm=mock_llm, enable_scheduler=False)
     app.config['TESTING'] = True
 
     with app.test_client() as client:
@@ -704,7 +704,7 @@ def test_create_app_with_scheduler_already_running() -> None:
     with patch('companion_memory.scheduler.SchedulerLock.acquire') as mock_acquire:
         mock_acquire.return_value = False  # Simulate scheduler already running
 
-        app = create_app()
+        app = create_app(enable_scheduler=False)
         app.config['TESTING'] = True
 
         with app.test_client() as client:
@@ -715,3 +715,21 @@ def test_create_app_with_scheduler_already_running() -> None:
             # Verify scheduler status endpoint works
             response = client.get('/scheduler/status')
             assert response.status_code == 200
+
+
+def test_create_app_with_scheduler_disabled() -> None:
+    """Test that create_app with scheduler disabled returns appropriate status."""
+    app = create_app(enable_scheduler=False)
+    app.config['TESTING'] = True
+
+    with app.test_client() as client:
+        # Verify we can still access endpoints
+        response = client.get('/')
+        assert response.status_code == 200
+
+        # Verify scheduler status endpoint indicates scheduler is disabled
+        response = client.get('/scheduler/status')
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data['scheduler_enabled'] is False
+        assert 'disabled' in data['message']

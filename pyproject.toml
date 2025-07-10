@@ -144,6 +144,10 @@ unfixable = []
     "ARG001",
 ]
 
+"src/companion_memory/app.py" = [
+    "C901",  # Function too complex (create_app handles many routes)
+]
+
 
 [tool.ruff.lint.flake8-quotes]
 docstring-quotes = "double"

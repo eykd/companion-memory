@@ -23,12 +23,15 @@ def get_log_store() -> LogStore:
     return MemoryLogStore()
 
 
-def create_app(log_store: LogStore | None = None, llm: LLMClient | None = None) -> Flask:  # noqa: C901
+def create_app(
+    log_store: LogStore | None = None, llm: LLMClient | None = None, *, enable_scheduler: bool = True
+) -> Flask:
     """Create and configure the Flask application.
 
     Args:
         log_store: Optional log store instance to inject. If None, uses default.
         llm: Optional LLM client instance to inject. If None, uses default.
+        enable_scheduler: Whether to start the distributed scheduler. Defaults to True.
 
     Returns:
         Configured Flask application instance
@@ -41,20 +44,23 @@ def create_app(log_store: LogStore | None = None, llm: LLMClient | None = None) 
         log_store = get_log_store()
 
     # Initialize distributed scheduler (coordinates across workers/containers via DynamoDB)
-    scheduler = get_scheduler()
-    if scheduler.start():
-        # This worker won the race to run the scheduler
-        app.logger.info('Distributed scheduler started successfully in this worker')
+    if enable_scheduler:
+        scheduler = get_scheduler()
+        if scheduler.start():
+            # This worker won the race to run the scheduler
+            app.logger.info('Distributed scheduler started successfully in this worker')
 
-        # Add scheduled jobs here
+            # Add scheduled jobs here
 
-        # Register cleanup on app teardown
-        @app.teardown_appcontext  # type: ignore[type-var]
-        def cleanup_scheduler(exc: Exception | None) -> None:  # noqa: ARG001
-            scheduler.shutdown()
+            # Register cleanup on app teardown
+            @app.teardown_appcontext  # type: ignore[type-var]
+            def cleanup_scheduler(exc: Exception | None) -> None:  # noqa: ARG001
+                scheduler.shutdown()
 
+        else:
+            app.logger.info('Scheduler already running in another worker/container')
     else:
-        app.logger.info('Scheduler already running in another worker/container')
+        app.logger.info('Scheduler disabled by configuration')
 
     @app.route('/')
     def healthcheck() -> str:
@@ -74,7 +80,10 @@ def create_app(log_store: LogStore | None = None, llm: LLMClient | None = None) 
             JSON with scheduler status information
 
         """
-        return scheduler.get_status()
+        if enable_scheduler:
+            scheduler = get_scheduler()
+            return scheduler.get_status()
+        return {'scheduler_enabled': False, 'message': 'Scheduler disabled by configuration'}
 
     @app.route('/fail')
     def fail() -> str:
