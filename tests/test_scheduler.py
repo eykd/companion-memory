@@ -332,7 +332,7 @@ def test_distributed_scheduler_start_success() -> None:
         assert result is True
         assert scheduler.started is True
         mock_scheduler.start.assert_called_once()
-        mock_scheduler.add_job.assert_called_once()
+        assert mock_scheduler.add_job.call_count == 2  # lock refresh + heartbeat
         mock_acquire.assert_called_once()
 
 
@@ -387,6 +387,17 @@ def test_distributed_scheduler_refresh_lock_failure() -> None:
             mock_refresh.assert_called_once()
             mock_logger.warning.assert_called_once()
             mock_shutdown.assert_called_once()
+
+
+def test_distributed_scheduler_heartbeat_logger() -> None:
+    """Test scheduler heartbeat logger."""
+    with patch('boto3.resource'), patch('companion_memory.scheduler.logger') as mock_logger:
+        scheduler = DistributedScheduler('TestTable')
+
+        # Access private method for testing
+        scheduler._heartbeat_logger()  # noqa: SLF001
+
+        mock_logger.info.assert_called_once_with('Scheduler heartbeat - process %s active', scheduler.lock.process_id)
 
 
 def test_distributed_scheduler_add_job_when_started() -> None:

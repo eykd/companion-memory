@@ -200,6 +200,11 @@ class DistributedScheduler:
                 self._refresh_lock, 'interval', seconds=self._refresh_interval, id='lock_refresh', max_instances=1
             )
 
+            # Schedule heartbeat logger
+            self.scheduler.add_job(
+                self._heartbeat_logger, 'interval', seconds=60, id='heartbeat_logger', max_instances=1
+            )
+
             return True
 
         return False
@@ -210,6 +215,10 @@ class DistributedScheduler:
             # We lost the lock - shut down scheduler
             logger.warning('Lost scheduler lock, shutting down...')
             self.shutdown()
+
+    def _heartbeat_logger(self) -> None:
+        """Log a heartbeat message to indicate scheduler is active."""
+        logger.info('Scheduler heartbeat - process %s active', self.lock.process_id)
 
     def add_job(self, func: Callable[..., Any], trigger: str, **kwargs: str | int | bool | None) -> None:
         """Add a job to the scheduler.
