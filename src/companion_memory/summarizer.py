@@ -81,6 +81,7 @@ def _build_summary_prompt(logs_text: str, period: str) -> str:
         - Do not include a preamble, address, or salutation.
         - Do not invite the executive to respond or follow up.
         - Do not include any other text than the summary.
+        - Format your summary as a bulleted list.
 """
     )
 
