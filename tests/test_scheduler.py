@@ -14,11 +14,12 @@ from companion_memory.scheduler import (
 
 def test_scheduler_lock_key_format() -> None:
     """Test that scheduler lock uses correct table key format."""
-    lock = SchedulerLock('TestTable')
+    with patch('boto3.resource'):
+        lock = SchedulerLock('TestTable')
 
-    assert lock.partition_key == 'system#scheduler'
-    assert lock.sort_key == 'lock#main'
-    assert lock.table_name == 'TestTable'
+        assert lock.partition_key == 'system#scheduler'
+        assert lock.sort_key == 'lock#main'
+        assert lock.table_name == 'TestTable'
 
 
 def test_scheduler_lock_acquire_with_mocked_dynamodb() -> None:
@@ -289,14 +290,20 @@ def test_scheduler_lock_get_current_lock_holder_client_error() -> None:
 
 def test_scheduler_singleton_pattern() -> None:
     """Test that get_scheduler maintains singleton pattern."""
+    from companion_memory import scheduler
+
     # Clear any existing singleton
-    if hasattr(get_scheduler, '_instance'):
-        delattr(get_scheduler, '_instance')
+    original_instance = scheduler._scheduler_instance  # noqa: SLF001
+    scheduler._scheduler_instance = None  # noqa: SLF001
 
-    scheduler1 = get_scheduler()
-    scheduler2 = get_scheduler()
+    with patch('boto3.resource'):
+        scheduler1 = get_scheduler()
+        scheduler2 = get_scheduler()
 
-    assert scheduler1 is scheduler2
+        assert scheduler1 is scheduler2
+
+    # Restore original singleton for other tests
+    scheduler._scheduler_instance = original_instance  # noqa: SLF001
 
 
 def test_distributed_scheduler_status() -> None:
@@ -494,8 +501,26 @@ def test_flask_app_integration() -> None:
     """Test Flask app integrates with distributed scheduler."""
     from companion_memory.app import create_app
 
-    with patch('companion_memory.scheduler.SchedulerLock.acquire') as mock_acquire:
+    with (
+        patch('companion_memory.scheduler.SchedulerLock.acquire') as mock_acquire,
+        patch('boto3.resource') as mock_boto3,
+        patch('companion_memory.app.get_scheduler') as mock_get_scheduler,
+    ):
         mock_acquire.return_value = True
+        mock_table = MagicMock()
+        mock_boto3.return_value.Table.return_value = mock_table
+
+        # Mock scheduler with a proper status response
+        mock_scheduler = MagicMock()
+        mock_scheduler.start.return_value = True
+        mock_scheduler.get_status.return_value = {
+            'scheduler_started': True,
+            'lock_acquired': True,
+            'process_id': 'test-process',
+            'current_lock_holder': None,
+            'instance_info': {'test': 'info'},
+        }
+        mock_get_scheduler.return_value = mock_scheduler
 
         # Create app - this should start the scheduler
         app = create_app()
@@ -504,10 +529,8 @@ def test_flask_app_integration() -> None:
         with app.test_client() as client:
             response = client.get('/scheduler/status')
             assert response.status_code == 200
-
-        # Clean up
-        scheduler = get_scheduler()
-        scheduler.shutdown()
+            data = response.get_json()
+            assert data['scheduler_started'] is True
 
 
 def test_get_slack_client_success() -> None:

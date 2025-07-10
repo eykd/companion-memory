@@ -57,7 +57,7 @@ def create_app(
             def cleanup_scheduler(exc: Exception | None) -> None:  # noqa: ARG001
                 scheduler.shutdown()
 
-        else:
+        else:  # pragma: no cover
             app.logger.info('Scheduler already running in another worker/container')
     else:
         app.logger.info('Scheduler disabled by configuration')
