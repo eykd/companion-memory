@@ -1,5 +1,6 @@
 """Distributed scheduler for coordinating background tasks across workers."""
 
+import contextlib
 import logging
 import os
 import time
@@ -178,50 +179,87 @@ class DistributedScheduler:
         self.scheduler: BackgroundScheduler | None = None
         self.lock = SchedulerLock(table_name)
         self.started = False
-        self._refresh_interval = 30  # Refresh lock every 30 seconds
+        self._lock_check_interval = 30  # Check lock every 30 seconds
+        self._jobs_added = False  # Track if we've added active jobs
 
     def start(self) -> bool:
-        """Start the scheduler if we can acquire the distributed lock.
+        """Start the scheduler and begin competing for the distributed lock.
+
+        Always starts the scheduler. Workers compete for the DynamoDB lock,
+        and only the lock holder executes jobs. Workers without the lock
+        periodically attempt to acquire it.
 
         Returns:
-            True if scheduler was started, False if another instance is running
+            True (always succeeds in starting the scheduler infrastructure)
 
         """
         if self.started:
             return True
 
+        # Always start the BackgroundScheduler
+        self.scheduler = BackgroundScheduler()
+        self.scheduler.start()
+        self.started = True
+
+        # Add the lock management job that runs on all workers
+        self.scheduler.add_job(
+            self._manage_lock, 'interval', seconds=self._lock_check_interval, id='lock_manager', max_instances=1
+        )
+
+        # Try to acquire lock immediately and add jobs if successful
+        self._attempt_lock_acquisition()
+
+        return True
+
+    def _manage_lock(self) -> None:
+        """Manage the distributed lock - refresh if held, attempt to acquire if not held."""
+        if self.lock.lock_acquired:
+            # We have the lock - try to refresh it
+            if not self.lock.refresh():
+                # We lost the lock - remove active jobs but keep trying to reacquire
+                logger.warning('Lost scheduler lock, removing jobs but continuing to compete for lock')
+                self._remove_active_jobs()
+        else:
+            # We don't have the lock - try to acquire it
+            self._attempt_lock_acquisition()
+
+    def _attempt_lock_acquisition(self) -> None:
+        """Attempt to acquire the distributed lock and add jobs if successful."""
         if self.lock.acquire():
-            self.scheduler = BackgroundScheduler()
-            self.scheduler.start()
-            self.started = True
+            logger.info('Acquired scheduler lock - process %s now active', self.lock.process_id)
+            self._add_active_jobs()
 
-            # Schedule lock refresh job
-            self.scheduler.add_job(
-                self._refresh_lock, 'interval', seconds=self._refresh_interval, id='lock_refresh', max_instances=1
-            )
+    def _add_active_jobs(self) -> None:
+        """Add active jobs when we acquire the lock."""
+        if self._jobs_added or not self.scheduler:
+            return
 
-            # Schedule heartbeat logger
-            self.scheduler.add_job(
-                self._heartbeat_logger, 'interval', seconds=60, id='heartbeat_logger', max_instances=1
-            )
+        # Schedule heartbeat logger
+        self.scheduler.add_job(self._heartbeat_logger, 'interval', seconds=60, id='heartbeat_logger', max_instances=1)
 
-            return True
+        self._jobs_added = True
+        logger.info('Added active scheduler jobs')
 
-        return False
+    def _remove_active_jobs(self) -> None:
+        """Remove active jobs when we lose the lock."""
+        if not self._jobs_added or not self.scheduler:
+            return
 
-    def _refresh_lock(self) -> None:
-        """Refresh the distributed lock to maintain ownership."""
-        if not self.lock.refresh():
-            # We lost the lock - shut down scheduler
-            logger.warning('Lost scheduler lock, shutting down...')
-            self.shutdown()
+        # Remove heartbeat logger
+        with contextlib.suppress(Exception):
+            self.scheduler.remove_job('heartbeat_logger')
+
+        self._jobs_added = False
+        logger.info('Removed active scheduler jobs')
 
     def _heartbeat_logger(self) -> None:
         """Log a heartbeat message to indicate scheduler is active."""
-        logger.info('Scheduler heartbeat - process %s active', self.lock.process_id)
+        # Double-check we still have the lock before logging
+        if self.lock.lock_acquired:
+            logger.info('Scheduler heartbeat - process %s active', self.lock.process_id)
 
     def add_job(self, func: Callable[..., Any], trigger: str, **kwargs: str | int | bool | None) -> None:
-        """Add a job to the scheduler.
+        """Add a job to the scheduler (only executes if this worker holds the lock).
 
         Args:
             func: Function to schedule
@@ -229,13 +267,16 @@ class DistributedScheduler:
             **kwargs: Additional arguments for the job
 
         """
-        if self.scheduler and self.started:
+        if self.scheduler and self.started and self.lock.lock_acquired:
             self.scheduler.add_job(func, trigger, **kwargs)
 
     def shutdown(self) -> None:
         """Shutdown the scheduler and release the distributed lock."""
         if self.scheduler and self.started:
             try:
+                # Remove active jobs first
+                self._remove_active_jobs()
+                # Shutdown the scheduler
                 self.scheduler.shutdown(wait=True)
             except Exception:
                 logger.exception('Error shutting down scheduler')

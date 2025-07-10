@@ -36,9 +36,12 @@ sentry_sdk.init(
 log_store = DynamoLogStore()
 llm_client = LLMLClient()
 
+# Get a logger for this module
+wsgi_logger = logging.getLogger(__name__)
+
 # Log application startup
-logging.info('Starting companion-memory application with production configuration')
+wsgi_logger.info('Starting companion-memory application with production configuration')
 
 application = create_app(log_store=log_store, llm=llm_client)
 
-logging.info('Companion-memory application created successfully')
+wsgi_logger.info('Companion-memory application created successfully')

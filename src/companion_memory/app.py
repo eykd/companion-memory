@@ -46,19 +46,16 @@ def create_app(
     # Initialize distributed scheduler (coordinates across workers/containers via DynamoDB)
     if enable_scheduler:
         scheduler = get_scheduler()
-        if scheduler.start():
-            # This worker won the race to run the scheduler
-            app.logger.info('Distributed scheduler started successfully in this worker')
+        scheduler.start()  # Always starts successfully - workers compete for DynamoDB lock
+        app.logger.info('Distributed scheduler infrastructure started - competing for lock')
 
-            # Add scheduled jobs here
+        # Add scheduled jobs here
 
-            # Register cleanup on app teardown
-            @app.teardown_appcontext  # type: ignore[type-var]
-            def cleanup_scheduler(exc: Exception | None) -> None:  # noqa: ARG001
-                scheduler.shutdown()
+        # Register cleanup on app teardown
+        @app.teardown_appcontext  # type: ignore[type-var]
+        def cleanup_scheduler(exc: Exception | None) -> None:  # noqa: ARG001
+            scheduler.shutdown()
 
-        else:  # pragma: no cover
-            app.logger.info('Scheduler already running in another worker/container')
     else:
         app.logger.info('Scheduler disabled by configuration')
 

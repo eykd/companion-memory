@@ -324,7 +324,7 @@ def test_distributed_scheduler_status() -> None:
 
 
 def test_distributed_scheduler_start_success() -> None:
-    """Test scheduler start success."""
+    """Test scheduler start success with immediate lock acquisition."""
     with patch('boto3.resource'), patch('companion_memory.scheduler.BackgroundScheduler') as mock_scheduler_class:
         mock_scheduler = MagicMock()
         mock_scheduler_class.return_value = mock_scheduler
@@ -339,7 +339,7 @@ def test_distributed_scheduler_start_success() -> None:
         assert result is True
         assert scheduler.started is True
         mock_scheduler.start.assert_called_once()
-        assert mock_scheduler.add_job.call_count == 2  # lock refresh + heartbeat
+        assert mock_scheduler.add_job.call_count == 2  # lock_manager + heartbeat
         mock_acquire.assert_called_once()
 
 
@@ -354,9 +354,12 @@ def test_distributed_scheduler_start_already_started() -> None:
         assert result is True
 
 
-def test_distributed_scheduler_start_failure() -> None:
-    """Test scheduler start failure (lock not acquired)."""
-    with patch('boto3.resource'):
+def test_distributed_scheduler_start_without_immediate_lock() -> None:
+    """Test scheduler start when lock is not immediately acquired."""
+    with patch('boto3.resource'), patch('companion_memory.scheduler.BackgroundScheduler') as mock_scheduler_class:
+        mock_scheduler = MagicMock()
+        mock_scheduler_class.return_value = mock_scheduler
+
         scheduler = DistributedScheduler('TestTable')
 
         # Mock failed lock acquisition
@@ -364,42 +367,64 @@ def test_distributed_scheduler_start_failure() -> None:
         with patch.object(scheduler.lock, 'acquire', mock_acquire):
             result = scheduler.start()
 
-        assert result is False
-        assert scheduler.started is False
+        assert result is True  # Scheduler always starts successfully
+        assert scheduler.started is True
+        mock_scheduler.start.assert_called_once()
+        assert mock_scheduler.add_job.call_count == 1  # Only lock_manager job added
         mock_acquire.assert_called_once()
 
 
-def test_distributed_scheduler_refresh_lock_success() -> None:
-    """Test scheduler refresh lock success."""
+def test_distributed_scheduler_manage_lock_with_lock_held() -> None:
+    """Test scheduler manage lock when lock is held."""
     with patch('boto3.resource'):
         scheduler = DistributedScheduler('TestTable')
+        scheduler.lock.lock_acquired = True  # Simulate holding the lock
         mock_refresh = MagicMock(return_value=True)
         with patch.object(scheduler.lock, 'refresh', mock_refresh):
             # Access private method for testing
-            scheduler._refresh_lock()  # noqa: SLF001
+            scheduler._manage_lock()  # noqa: SLF001
 
             mock_refresh.assert_called_once()
 
 
-def test_distributed_scheduler_refresh_lock_failure() -> None:
-    """Test scheduler refresh lock failure."""
+def test_distributed_scheduler_manage_lock_loses_lock() -> None:
+    """Test scheduler manage lock when lock is lost during refresh."""
     with patch('boto3.resource'), patch('companion_memory.scheduler.logger') as mock_logger:
         scheduler = DistributedScheduler('TestTable')
+        scheduler.lock.lock_acquired = True  # Simulate holding the lock
+        scheduler._jobs_added = True  # Simulate having active jobs  # noqa: SLF001
         mock_refresh = MagicMock(return_value=False)
-        mock_shutdown = MagicMock()
-        with patch.object(scheduler.lock, 'refresh', mock_refresh), patch.object(scheduler, 'shutdown', mock_shutdown):
+        mock_remove_jobs = MagicMock()
+        with (
+            patch.object(scheduler.lock, 'refresh', mock_refresh),
+            patch.object(scheduler, '_remove_active_jobs', mock_remove_jobs),
+        ):
             # Access private method for testing
-            scheduler._refresh_lock()  # noqa: SLF001
+            scheduler._manage_lock()  # noqa: SLF001
 
             mock_refresh.assert_called_once()
             mock_logger.warning.assert_called_once()
-            mock_shutdown.assert_called_once()
+            mock_remove_jobs.assert_called_once()
+
+
+def test_distributed_scheduler_manage_lock_without_lock() -> None:
+    """Test scheduler manage lock when lock is not held."""
+    with patch('boto3.resource'):
+        scheduler = DistributedScheduler('TestTable')
+        scheduler.lock.lock_acquired = False  # Simulate not holding the lock
+        mock_acquire = MagicMock(return_value=False)
+        with patch.object(scheduler.lock, 'acquire', mock_acquire):
+            # Access private method for testing
+            scheduler._manage_lock()  # noqa: SLF001
+
+            mock_acquire.assert_called_once()
 
 
 def test_distributed_scheduler_heartbeat_logger() -> None:
-    """Test scheduler heartbeat logger."""
+    """Test scheduler heartbeat logger when lock is held."""
     with patch('boto3.resource'), patch('companion_memory.scheduler.logger') as mock_logger:
         scheduler = DistributedScheduler('TestTable')
+        scheduler.lock.lock_acquired = True  # Must have lock to log heartbeat
 
         # Access private method for testing
         scheduler._heartbeat_logger()  # noqa: SLF001
@@ -407,8 +432,21 @@ def test_distributed_scheduler_heartbeat_logger() -> None:
         mock_logger.info.assert_called_once_with('Scheduler heartbeat - process %s active', scheduler.lock.process_id)
 
 
+def test_distributed_scheduler_heartbeat_logger_without_lock() -> None:
+    """Test scheduler heartbeat logger when lock is not held."""
+    with patch('boto3.resource'), patch('companion_memory.scheduler.logger') as mock_logger:
+        scheduler = DistributedScheduler('TestTable')
+        scheduler.lock.lock_acquired = False  # No lock
+
+        # Access private method for testing
+        scheduler._heartbeat_logger()  # noqa: SLF001
+
+        # Should not log when no lock
+        mock_logger.info.assert_not_called()
+
+
 def test_distributed_scheduler_add_job_when_started() -> None:
-    """Test adding job when scheduler is started."""
+    """Test adding job when scheduler is started and has lock."""
     with patch('boto3.resource'), patch('companion_memory.scheduler.BackgroundScheduler') as mock_scheduler_class:
         mock_scheduler = MagicMock()
         mock_scheduler_class.return_value = mock_scheduler
@@ -416,6 +454,7 @@ def test_distributed_scheduler_add_job_when_started() -> None:
         scheduler = DistributedScheduler('TestTable')
         scheduler.started = True
         scheduler.scheduler = mock_scheduler
+        scheduler.lock.lock_acquired = True  # Must have lock to add jobs
 
         def test_job() -> None:
             pass
@@ -437,6 +476,92 @@ def test_distributed_scheduler_add_job_when_not_started() -> None:
         scheduler.add_job(test_job, 'interval', seconds=30)
 
         # Should not call scheduler.add_job since not started
+
+
+def test_distributed_scheduler_add_job_without_lock() -> None:
+    """Test adding job when scheduler is started but doesn't have lock."""
+    with patch('boto3.resource'), patch('companion_memory.scheduler.BackgroundScheduler') as mock_scheduler_class:
+        mock_scheduler = MagicMock()
+        mock_scheduler_class.return_value = mock_scheduler
+
+        scheduler = DistributedScheduler('TestTable')
+        scheduler.started = True
+        scheduler.scheduler = mock_scheduler
+        scheduler.lock.lock_acquired = False  # No lock
+
+        def test_job() -> None:
+            pass
+
+        scheduler.add_job(test_job, 'interval', seconds=30)
+
+        # Should not call scheduler.add_job since no lock
+        mock_scheduler.add_job.assert_not_called()
+
+
+def test_distributed_scheduler_add_active_jobs_when_already_added() -> None:
+    """Test _add_active_jobs when jobs are already added."""
+    with patch('boto3.resource'), patch('companion_memory.scheduler.BackgroundScheduler') as mock_scheduler_class:
+        mock_scheduler = MagicMock()
+        mock_scheduler_class.return_value = mock_scheduler
+
+        scheduler = DistributedScheduler('TestTable')
+        scheduler.scheduler = mock_scheduler
+        scheduler._jobs_added = True  # Jobs already added  # noqa: SLF001
+
+        # Call the method - should return early
+        scheduler._add_active_jobs()  # noqa: SLF001
+
+        # Should not add any jobs since already added
+        mock_scheduler.add_job.assert_not_called()
+
+
+def test_distributed_scheduler_add_active_jobs_without_scheduler() -> None:
+    """Test _add_active_jobs when scheduler is None."""
+    with patch('boto3.resource'):
+        scheduler = DistributedScheduler('TestTable')
+        scheduler.scheduler = None
+        scheduler._jobs_added = False  # noqa: SLF001
+
+        # Call the method - should return early
+        scheduler._add_active_jobs()  # noqa: SLF001
+
+        # No exception should be raised
+
+
+def test_distributed_scheduler_remove_active_jobs() -> None:
+    """Test _remove_active_jobs method."""
+    with patch('boto3.resource'), patch('companion_memory.scheduler.BackgroundScheduler') as mock_scheduler_class:
+        mock_scheduler = MagicMock()
+        mock_scheduler_class.return_value = mock_scheduler
+
+        scheduler = DistributedScheduler('TestTable')
+        scheduler.scheduler = mock_scheduler
+        scheduler._jobs_added = True  # noqa: SLF001
+
+        # Call the method
+        scheduler._remove_active_jobs()  # noqa: SLF001
+
+        # Should remove the heartbeat job
+        mock_scheduler.remove_job.assert_called_once_with('heartbeat_logger')
+        assert scheduler._jobs_added is False  # noqa: SLF001
+
+
+def test_distributed_scheduler_remove_active_jobs_with_exception() -> None:
+    """Test _remove_active_jobs when job removal raises exception."""
+    with patch('boto3.resource'), patch('companion_memory.scheduler.BackgroundScheduler') as mock_scheduler_class:
+        mock_scheduler = MagicMock()
+        mock_scheduler.remove_job.side_effect = Exception('Job not found')
+        mock_scheduler_class.return_value = mock_scheduler
+
+        scheduler = DistributedScheduler('TestTable')
+        scheduler.scheduler = mock_scheduler
+        scheduler._jobs_added = True  # noqa: SLF001
+
+        # Call the method - should not raise exception
+        scheduler._remove_active_jobs()  # noqa: SLF001
+
+        # Should still mark jobs as removed despite exception
+        assert scheduler._jobs_added is False  # noqa: SLF001
 
 
 def test_distributed_scheduler_shutdown_with_scheduler() -> None:
