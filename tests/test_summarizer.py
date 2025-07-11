@@ -206,14 +206,14 @@ def test_get_user_timezone_success() -> None:
     """Test that _get_user_timezone returns correct timezone for valid user."""
     from unittest.mock import MagicMock, patch
 
-    # Mock Slack client
-    mock_slack_client = MagicMock()
-    mock_slack_client.users_info.return_value = {'ok': True, 'user': {'tz': 'America/New_York'}}
+    # Mock DynamoDB user settings store
+    mock_settings_store = MagicMock()
+    mock_settings_store.get_user_settings.return_value = {'timezone': 'America/New_York'}
 
     # Import the helper function
     from companion_memory.summarizer import _get_user_timezone
 
-    with patch('companion_memory.scheduler.get_slack_client', return_value=mock_slack_client):
+    with patch('companion_memory.user_settings.DynamoUserSettingsStore', return_value=mock_settings_store):
         timezone_result = _get_user_timezone('U123456789')
 
     # Verify timezone is correct
@@ -222,22 +222,22 @@ def test_get_user_timezone_success() -> None:
     assert isinstance(timezone_result, zoneinfo.ZoneInfo)
     assert str(timezone_result) == 'America/New_York'
 
-    # Verify Slack client was called
-    mock_slack_client.users_info.assert_called_once_with(user='U123456789')
+    # Verify settings store was called
+    mock_settings_store.get_user_settings.assert_called_once_with('U123456789')
 
 
 def test_get_user_timezone_fallback_to_utc() -> None:
-    """Test that _get_user_timezone falls back to UTC when Slack API fails."""
+    """Test that _get_user_timezone falls back to UTC when no timezone is set."""
     from unittest.mock import MagicMock, patch
 
-    # Mock Slack client that fails
-    mock_slack_client = MagicMock()
-    mock_slack_client.users_info.return_value = {'ok': False}
+    # Mock user settings store with no timezone
+    mock_settings_store = MagicMock()
+    mock_settings_store.get_user_settings.return_value = {}
 
     # Import the helper function
     from companion_memory.summarizer import _get_user_timezone
 
-    with patch('companion_memory.scheduler.get_slack_client', return_value=mock_slack_client):
+    with patch('companion_memory.user_settings.DynamoUserSettingsStore', return_value=mock_settings_store):
         timezone_result = _get_user_timezone('U123456789')
 
     # Verify falls back to UTC
@@ -250,14 +250,14 @@ def test_get_user_timezone_invalid_timezone_fallback() -> None:
     """Test that _get_user_timezone falls back to UTC for invalid timezone."""
     from unittest.mock import MagicMock, patch
 
-    # Mock Slack client with invalid timezone
-    mock_slack_client = MagicMock()
-    mock_slack_client.users_info.return_value = {'ok': True, 'user': {'tz': 'Invalid/Timezone'}}
+    # Mock user settings store with invalid timezone
+    mock_settings_store = MagicMock()
+    mock_settings_store.get_user_settings.return_value = {'timezone': 'Invalid/Timezone'}
 
     # Import the helper function
     from companion_memory.summarizer import _get_user_timezone
 
-    with patch('companion_memory.scheduler.get_slack_client', return_value=mock_slack_client):
+    with patch('companion_memory.user_settings.DynamoUserSettingsStore', return_value=mock_settings_store):
         timezone_result = _get_user_timezone('U123456789')
 
     # Verify falls back to UTC
@@ -270,14 +270,14 @@ def test_get_user_timezone_utc_string_returns_utc() -> None:
     """Test that _get_user_timezone returns UTC for 'UTC' string."""
     from unittest.mock import MagicMock, patch
 
-    # Mock Slack client with UTC timezone
-    mock_slack_client = MagicMock()
-    mock_slack_client.users_info.return_value = {'ok': True, 'user': {'tz': 'UTC'}}
+    # Mock user settings store with UTC timezone
+    mock_settings_store = MagicMock()
+    mock_settings_store.get_user_settings.return_value = {'timezone': 'UTC'}
 
     # Import the helper function
     from companion_memory.summarizer import _get_user_timezone
 
-    with patch('companion_memory.scheduler.get_slack_client', return_value=mock_slack_client):
+    with patch('companion_memory.user_settings.DynamoUserSettingsStore', return_value=mock_settings_store):
         timezone_result = _get_user_timezone('U123456789')
 
     # Verify returns UTC
@@ -290,14 +290,14 @@ def test_get_user_timezone_exception_fallback() -> None:
     """Test that _get_user_timezone falls back to UTC when exception occurs."""
     from unittest.mock import MagicMock, patch
 
-    # Mock Slack client that raises exception
-    mock_slack_client = MagicMock()
-    mock_slack_client.users_info.side_effect = Exception('API Error')
+    # Mock user settings store that raises exception
+    mock_settings_store = MagicMock()
+    mock_settings_store.get_user_settings.side_effect = Exception('DynamoDB Error')
 
     # Import the helper function
     from companion_memory.summarizer import _get_user_timezone
 
-    with patch('companion_memory.scheduler.get_slack_client', return_value=mock_slack_client):
+    with patch('companion_memory.user_settings.DynamoUserSettingsStore', return_value=mock_settings_store):
         timezone_result = _get_user_timezone('U123456789')
 
     # Verify falls back to UTC

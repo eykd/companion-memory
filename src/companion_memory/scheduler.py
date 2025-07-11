@@ -15,6 +15,7 @@ from slack_sdk import WebClient
 
 from companion_memory.storage import LogStore
 from companion_memory.summarizer import LLMClient
+from companion_memory.user_sync import sync_user_timezone
 
 logger = logging.getLogger(__name__)
 
@@ -246,6 +247,9 @@ class DistributedScheduler:
         self.scheduler.add_job(
             self._check_daily_summaries, 'interval', hours=1, id='daily_summary_checker', max_instances=1
         )
+
+        # Schedule user time zone sync every 6 hours
+        self.scheduler.add_job(sync_user_timezone, 'interval', hours=6, id='user_timezone_sync', max_instances=1)
 
         self._jobs_added = True
         logger.info('Added active scheduler jobs')

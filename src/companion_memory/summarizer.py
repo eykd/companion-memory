@@ -151,7 +151,7 @@ def summarize_day(user_id: str, log_store: LogStore, llm: LLMClient) -> str:
 
 
 def _get_user_timezone(user_id: str) -> timezone | zoneinfo.ZoneInfo:
-    """Get user's timezone from Slack, with fallback to UTC.
+    """Get user's timezone from DynamoDB user settings, with fallback to UTC.
 
     Args:
         user_id: The user identifier
@@ -161,15 +161,12 @@ def _get_user_timezone(user_id: str) -> timezone | zoneinfo.ZoneInfo:
 
     """
     try:
-        from companion_memory.scheduler import get_slack_client
+        from companion_memory.user_settings import DynamoUserSettingsStore
 
-        slack_client = get_slack_client()
-        user_info = slack_client.users_info(user=user_id)
+        settings_store = DynamoUserSettingsStore()
+        user_settings = settings_store.get_user_settings(user_id)
+        user_tz_name = user_settings.get('timezone', 'UTC')
 
-        if not user_info.get('ok'):
-            return UTC
-
-        user_tz_name = user_info['user'].get('tz', 'UTC')
         if user_tz_name == 'UTC':
             return UTC
 
@@ -179,7 +176,7 @@ def _get_user_timezone(user_id: str) -> timezone | zoneinfo.ZoneInfo:
             return UTC
 
     except Exception:  # noqa: BLE001
-        # Fall back to UTC if any error occurs with Slack API
+        # Fall back to UTC if any error occurs with DynamoDB
         return UTC
 
 
@@ -188,7 +185,7 @@ def _summarize_timezone_aware_day(
 ) -> str:
     """Generate a summary of the user's logs from a specific day in their timezone.
 
-    Discovers the user's timezone via Slack's users_info API, then calculates
+    Gets the user's timezone from DynamoDB user settings, then calculates
     the target day's date range in that timezone and fetches logs accordingly.
 
     Args:
@@ -228,7 +225,7 @@ def _summarize_timezone_aware_day(
 def summarize_yesterday(user_id: str, log_store: LogStore, llm: LLMClient) -> str:
     """Generate a summary of the user's logs from yesterday in their timezone.
 
-    Discovers the user's timezone via Slack's users_info API, then calculates
+    Gets the user's timezone from DynamoDB user settings, then calculates
     yesterday's date range in that timezone and fetches logs accordingly.
 
     Args:
@@ -246,7 +243,7 @@ def summarize_yesterday(user_id: str, log_store: LogStore, llm: LLMClient) -> st
 def summarize_today(user_id: str, log_store: LogStore, llm: LLMClient) -> str:
     """Generate a summary of the user's logs from today in their timezone.
 
-    Discovers the user's timezone via Slack's users_info API, then calculates
+    Gets the user's timezone from DynamoDB user settings, then calculates
     today's date range in that timezone and fetches logs accordingly.
 
     Args:

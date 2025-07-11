@@ -339,7 +339,9 @@ def test_distributed_scheduler_start_success() -> None:
         assert result is True
         assert scheduler.started is True
         mock_scheduler.start.assert_called_once()
-        assert mock_scheduler.add_job.call_count == 3  # lock_manager + heartbeat + daily_summary_checker
+        assert (
+            mock_scheduler.add_job.call_count == 4
+        )  # lock_manager + heartbeat + daily_summary_checker + user_timezone_sync
         mock_acquire.assert_called_once()
 
 
