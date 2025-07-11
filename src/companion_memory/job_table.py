@@ -107,23 +107,41 @@ class JobTable:
 
         """
         sk = make_job_sk(scheduled_for, job_id)
+        updates = {'status': status, **kwargs}
 
-        update_expression = 'SET #status = :status'
-        expression_attribute_names = {'#status': 'status'}
-        expression_attribute_values: dict[str, Any] = {':status': status}
-
-        # Add any additional attributes to update
-        for key, value in kwargs.items():
-            update_expression += f', #{key} = :{key}'
-            expression_attribute_names[f'#{key}'] = key
-            expression_attribute_values[f':{key}'] = value
+        expression_parts = self._build_update_expression(updates)
 
         self._table.update_item(
             Key={'PK': 'job', 'SK': sk},
-            UpdateExpression=update_expression,
-            ExpressionAttributeNames=expression_attribute_names,
-            ExpressionAttributeValues=expression_attribute_values,
+            UpdateExpression=expression_parts['expression'],
+            ExpressionAttributeNames=expression_parts['names'],
+            ExpressionAttributeValues=expression_parts['values'],
         )
+
+    def _build_update_expression(self, updates: dict[str, Any]) -> dict[str, Any]:
+        """Build DynamoDB update expression from key-value pairs.
+
+        Args:
+            updates: Dictionary of attribute names to values
+
+        Returns:
+            Dictionary containing expression, names, and values
+
+        """
+        set_clauses = []
+        expression_attribute_names = {}
+        expression_attribute_values = {}
+
+        for key, value in updates.items():
+            set_clauses.append(f'#{key} = :{key}')
+            expression_attribute_names[f'#{key}'] = key
+            expression_attribute_values[f':{key}'] = value
+
+        return {
+            'expression': f'SET {", ".join(set_clauses)}',
+            'names': expression_attribute_names,
+            'values': expression_attribute_values,
+        }
 
     def _item_to_job(self, item: dict[str, Any]) -> ScheduledJob:
         """Convert DynamoDB item to ScheduledJob model.
