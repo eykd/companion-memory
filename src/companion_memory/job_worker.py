@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from companion_memory.job_dispatcher import BaseJobHandler, JobDispatcher
 from companion_memory.job_models import ScheduledJob
+from companion_memory.retry_policy import RetryPolicy
 
 if TYPE_CHECKING:  # pragma: no cover
     from companion_memory.job_table import JobTable
@@ -21,6 +22,8 @@ class JobWorker:
         worker_id: str | None = None,
         polling_limit: int = 25,
         lock_timeout_minutes: int = 10,
+        max_attempts: int = 5,
+        base_delay_seconds: int = 60,
     ) -> None:
         """Initialize the job worker.
 
@@ -29,6 +32,8 @@ class JobWorker:
             worker_id: Unique identifier for this worker instance
             polling_limit: Maximum number of jobs to fetch per poll
             lock_timeout_minutes: How long to hold job locks
+            max_attempts: Maximum retry attempts before dead letter
+            base_delay_seconds: Base delay for exponential backoff
 
         """
         self._job_table = job_table
@@ -36,6 +41,7 @@ class JobWorker:
         self._polling_limit = polling_limit
         self._lock_timeout = timedelta(minutes=lock_timeout_minutes)
         self._dispatcher = JobDispatcher()
+        self._retry_policy = RetryPolicy(base_delay_seconds, max_attempts)
 
     def register_handler(self, job_type: str, handler_class: type[BaseJobHandler]) -> None:
         """Register a handler for a specific job type.
@@ -163,15 +169,72 @@ class JobWorker:
             )
 
         except Exception as e:  # noqa: BLE001
-            # Mark job as failed and record error
-            error_message = f'{type(e).__name__}: {e}\n{traceback.format_exc()}'
+            # Handle job failure with retry policy
+            self._handle_job_failure(job, e, now)
 
+    def _handle_job_failure(self, job: ScheduledJob, error: Exception, now: datetime) -> None:
+        """Handle job failure with retry policy and backoff.
+
+        Args:
+            job: The failed job
+            error: The exception that occurred
+            now: Current time
+
+        """
+        error_message = f'{type(error).__name__}: {error}\n{traceback.format_exc()}'
+        new_attempts = job.attempts + 1
+
+        # Determine if job should be retried or go to dead letter
+        if self._retry_policy.should_retry(new_attempts):
+            # Calculate next run time with exponential backoff
+            next_run = self._retry_policy.calculate_next_run(now, new_attempts)
+
+            # Reschedule the job for later
+            self._reschedule_job(job, next_run, new_attempts, error_message)
+        else:
+            # Job has exceeded max attempts, send to dead letter
             self._job_table.update_job_status(
                 job.job_id,
                 job.scheduled_for,
-                'failed',
-                attempts=job.attempts + 1,
+                'dead_letter',
+                attempts=new_attempts,
                 last_error=error_message,
                 locked_by=None,
                 lock_expires_at=None,
             )
+
+    def _reschedule_job(self, job: ScheduledJob, next_run: datetime, attempts: int, error_message: str) -> None:
+        """Reschedule a failed job for later execution.
+
+        Args:
+            job: The original job
+            next_run: When the job should run next
+            attempts: Number of attempts
+            error_message: Error message to record
+
+        """
+        # Update the current job to mark it as failed
+        self._job_table.update_job_status(
+            job.job_id,
+            job.scheduled_for,
+            'failed',
+            attempts=attempts,
+            last_error=error_message,
+            locked_by=None,
+            lock_expires_at=None,
+        )
+
+        # Create a new job with updated scheduled_for time
+        rescheduled_job = ScheduledJob(
+            job_id=job.job_id,
+            job_type=job.job_type,
+            payload=job.payload,
+            scheduled_for=next_run,
+            status='pending',
+            attempts=attempts,
+            last_error=error_message,
+            created_at=job.created_at,
+        )
+
+        # Store the rescheduled job
+        self._job_table.put_job(rescheduled_job)
