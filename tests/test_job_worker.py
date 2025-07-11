@@ -3,13 +3,13 @@
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
-from companion_memory.job_worker import JobWorker
 from moto import mock_aws
 from pydantic import BaseModel
 
 from companion_memory.job_dispatcher import BaseJobHandler
 from companion_memory.job_models import ScheduledJob
 from companion_memory.job_table import JobTable
+from companion_memory.job_worker import JobWorker
 
 
 class TestJobPayload(BaseModel):
@@ -232,3 +232,49 @@ def test_worker_respects_polling_limit() -> None:
     # Worker should only process the limit
     processed = worker.poll_and_process_jobs(now)
     assert processed == 2
+
+
+@mock_aws
+def test_worker_uses_current_time_when_none_provided() -> None:
+    """Test that worker uses current time when now=None."""
+    job_table = JobTable()
+    job_table.create_table_for_testing()
+
+    worker = JobWorker(job_table)
+
+    # Call without providing 'now' parameter - should use current time
+    processed = worker.poll_and_process_jobs()  # now=None
+    # Should complete without error (covers line 69: now = datetime.now(UTC))
+    assert processed == 0  # No jobs to process
+
+
+@mock_aws
+def test_worker_handles_job_claim_failure() -> None:
+    """Test that worker handles job claim failures gracefully."""
+    job_table = JobTable()
+    job_table.create_table_for_testing()
+
+    worker = JobWorker(job_table)
+    worker.register_handler('test_job', TestJobHandler)
+
+    now = datetime.now(UTC)
+    job = ScheduledJob(
+        job_id=uuid4(),
+        job_type='test_job',
+        payload={'message': 'test'},
+        scheduled_for=now - timedelta(minutes=1),
+        status='pending',
+        attempts=0,
+        created_at=now,
+    )
+
+    job_table.put_job(job)
+
+    # Mock the job_table.update_job_status to raise an exception
+    from unittest.mock import patch
+
+    with patch.object(job_table, 'update_job_status', side_effect=Exception('Claim failed')):
+        # Worker should handle the claim failure gracefully
+        processed = worker.poll_and_process_jobs(now)
+        # Should process 0 jobs due to claim failure (covers lines 145-147, 103)
+        assert processed == 0

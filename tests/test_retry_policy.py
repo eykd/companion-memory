@@ -166,3 +166,6 @@ def test_retry_policy_configurable_parameters() -> None:
     # Test that delay calculation uses custom base
     delay2 = policy.calculate_delay(2)
     assert delay2 == timedelta(seconds=60)  # 30 * 2^(2-1) = 30 * 2
+
+    # Test max_attempts property
+    assert policy.max_attempts == 10

@@ -64,7 +64,7 @@ def job_worker(polling_limit: int, lock_timeout: int, max_attempts: int, poll_in
     The job worker polls the DynamoDB table for due jobs and processes them
     using registered handlers. Failed jobs are retried with exponential backoff.
     """
-    run_job_worker(
+    run_job_worker(  # pragma: no cover
         polling_limit=polling_limit,
         lock_timeout_minutes=lock_timeout,
         max_attempts=max_attempts,

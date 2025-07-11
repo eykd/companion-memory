@@ -3,6 +3,7 @@
 from datetime import UTC, datetime
 from uuid import uuid4
 
+import pytest
 from moto import mock_aws
 
 from companion_memory.deduplication import DeduplicationIndex
@@ -110,3 +111,39 @@ def test_schedule_if_needed_with_deduplication() -> None:
 
     result = dedup_index.schedule_if_needed(duplicate_job, job_table, 'summary#U123456', '2025-07-11')
     assert result is False
+
+
+@mock_aws
+def test_deduplication_reraises_non_conditional_errors() -> None:
+    """Test that deduplication re-raises non-conditional check exceptions."""
+    from unittest.mock import Mock
+
+    from botocore.exceptions import ClientError
+
+    deduplication = DeduplicationIndex('CompanionMemory')
+    deduplication.create_table_for_testing()
+
+    # Mock the table.put_item to raise a non-conditional error
+    original_put_item = deduplication._table.put_item  # noqa: SLF001
+
+    # Create a non-conditional check error
+    error_response = {
+        'Error': {
+            'Code': 'ValidationException',  # Not ConditionalCheckFailedException
+            'Message': 'Some other error',
+        }
+    }
+
+    deduplication._table.put_item = Mock(side_effect=ClientError(error_response, 'PutItem'))  # noqa: SLF001
+
+    try:
+        # Should re-raise the non-conditional error (covers line 73)
+        with pytest.raises(ClientError) as exc_info:
+            deduplication.try_reserve('test-id', '2025-07-11', 'job', 'scheduled#2025-07-11T09:00:00')
+
+        # Verify it's the same error we injected
+        assert exc_info.value.response['Error']['Code'] == 'ValidationException'
+
+    finally:
+        # Restore original method
+        deduplication._table.put_item = original_put_item  # noqa: SLF001
