@@ -125,7 +125,7 @@ def create_app(
         # Store the log entry
         log_store.write_log(user_id=user_id, timestamp=timestamp, text=text, log_id=log_id)
 
-        return 'Logged', 200
+        return f'Logged: {text}', 200
 
     @app.route('/slack/events', methods=['POST'])
     def slack_events() -> tuple[str, int]:
