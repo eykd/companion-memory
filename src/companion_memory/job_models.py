@@ -52,16 +52,16 @@ def parse_job_sk(sk: str) -> tuple[datetime, UUID]:
         ValueError: If sort key format is invalid
 
     """
+    error_message = f'Invalid sort key format: {sk}'
+
     parts = sk.split('#')
     if len(parts) != 3 or parts[0] != 'scheduled':
-        error_message = f'Invalid sort key format: {sk}'
         raise ValueError(error_message)
 
     try:
         timestamp = datetime.fromisoformat(parts[1])
         job_id = UUID(parts[2])
     except (ValueError, TypeError) as exc:
-        error_message = f'Invalid sort key format: {sk}'
         raise ValueError(error_message) from exc
     else:
         return timestamp, job_id
