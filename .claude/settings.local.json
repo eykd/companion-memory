@@ -14,7 +14,9 @@
       "WebFetch(domain:llm.datasette.io)",
       "Bash(find:*)",
       "Bash(rg:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(timeout:*)",
+      "Bash(git reset:*)"
     ],
     "deny": []
   }
