@@ -69,7 +69,7 @@ def test_log_endpoint_with_valid_signature_returns_200(client: 'FlaskClient') ->
     )
 
     assert response.status_code == 200
-    assert response.get_data(as_text=True) == 'Logged'
+    assert response.get_data(as_text=True) == 'Logged: test message'
 
 
 def test_log_endpoint_stores_entry_with_valid_signature() -> None:
