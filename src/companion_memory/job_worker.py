@@ -70,13 +70,29 @@ class JobWorker:
             if not self._is_job_eligible(job, now):
                 continue
 
-            # Try to claim the job
-            if self._try_claim_job(job, now):
-                # Process the job
-                self._process_job(job, now)
+            # Claim and run the job
+            if self._claim_and_run(job, now):
                 processed_count += 1
 
         return processed_count
+
+    def _claim_and_run(self, job: ScheduledJob, now: datetime) -> bool:
+        """Claim a job and run it, handling both success and failure.
+
+        Args:
+            job: The job to claim and run
+            now: Current time
+
+        Returns:
+            True if job was successfully claimed and processed
+
+        """
+        # Try to claim the job
+        if self._try_claim_job(job, now):
+            # Process the job
+            self._process_job(job, now)
+            return True
+        return False
 
     def _is_job_eligible(self, job: ScheduledJob, now: datetime) -> bool:
         """Check if a job is eligible for processing.
