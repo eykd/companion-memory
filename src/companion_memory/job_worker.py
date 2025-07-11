@@ -5,6 +5,8 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
+import sentry_sdk
+
 from companion_memory.job_dispatcher import BaseJobHandler, JobDispatcher
 from companion_memory.job_models import ScheduledJob
 from companion_memory.retry_policy import RetryPolicy
@@ -184,6 +186,9 @@ class JobWorker:
         error_message = f'{type(error).__name__}: {error}\n{traceback.format_exc()}'
         new_attempts = job.attempts + 1
 
+        # Report error to Sentry with full job context
+        self._report_to_sentry(job, error)
+
         # Determine if job should be retried or go to dead letter
         if self._retry_policy.should_retry(new_attempts):
             # Calculate next run time with exponential backoff
@@ -238,3 +243,26 @@ class JobWorker:
 
         # Store the rescheduled job
         self._job_table.put_job(rescheduled_job)
+
+    def _report_to_sentry(self, job: ScheduledJob, error: Exception) -> None:
+        """Report job failure to Sentry with full context.
+
+        Args:
+            job: The failed job
+            error: The exception that occurred
+
+        """
+        # Set job context for Sentry
+        sentry_sdk.set_context(
+            'job',
+            {
+                'job_id': str(job.job_id),
+                'job_type': job.job_type,
+                'attempts': job.attempts,
+                'payload': job.payload,
+                'scheduled_for': job.scheduled_for.isoformat(),
+            },
+        )
+
+        # Capture the exception
+        sentry_sdk.capture_exception(error)
