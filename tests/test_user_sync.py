@@ -75,3 +75,67 @@ def test_sync_user_timezone_exception_handling() -> None:
     ):
         # Should not raise exception - it should be caught and logged
         sync_user_timezone()
+
+
+def test_sync_user_timezone_from_slack_success() -> None:
+    """Test sync_user_timezone_from_slack successful timezone sync."""
+    from companion_memory.user_sync import sync_user_timezone_from_slack
+
+    mock_slack_client = MagicMock()
+    mock_slack_client.users_info.return_value = {'ok': True, 'user': {'id': 'U123456789', 'tz': 'America/New_York'}}
+
+    mock_settings_store = MagicMock()
+
+    with (
+        patch('companion_memory.scheduler.get_slack_client', return_value=mock_slack_client),
+        patch('companion_memory.user_sync.DynamoUserSettingsStore', return_value=mock_settings_store),
+    ):
+        result = sync_user_timezone_from_slack('U123456789')
+
+    # Verify return value
+    assert result == 'America/New_York'
+
+    # Verify settings store was called with correct data
+    mock_settings_store.update_user_settings.assert_called_once_with('U123456789', {'timezone': 'America/New_York'})
+
+
+def test_sync_user_timezone_from_slack_api_failure() -> None:
+    """Test sync_user_timezone_from_slack when Slack API returns failure."""
+    from companion_memory.user_sync import sync_user_timezone_from_slack
+
+    mock_slack_client = MagicMock()
+    mock_slack_client.users_info.return_value = {'ok': False, 'error': 'user_not_found'}
+
+    with patch('companion_memory.scheduler.get_slack_client', return_value=mock_slack_client):
+        result = sync_user_timezone_from_slack('U123456789')
+
+    # Should return None on failure
+    assert result is None
+
+
+def test_sync_user_timezone_from_slack_no_timezone() -> None:
+    """Test sync_user_timezone_from_slack when user profile has no timezone."""
+    from companion_memory.user_sync import sync_user_timezone_from_slack
+
+    mock_slack_client = MagicMock()
+    mock_slack_client.users_info.return_value = {'ok': True, 'user': {'id': 'U123456789'}}
+
+    with patch('companion_memory.scheduler.get_slack_client', return_value=mock_slack_client):
+        result = sync_user_timezone_from_slack('U123456789')
+
+    # Should return None when no timezone in profile
+    assert result is None
+
+
+def test_sync_user_timezone_from_slack_exception() -> None:
+    """Test sync_user_timezone_from_slack handles exceptions gracefully."""
+    from companion_memory.user_sync import sync_user_timezone_from_slack
+
+    mock_slack_client = MagicMock()
+    mock_slack_client.users_info.side_effect = Exception('Network error')
+
+    with patch('companion_memory.scheduler.get_slack_client', return_value=mock_slack_client):
+        result = sync_user_timezone_from_slack('U123456789')
+
+    # Should return None on exception
+    assert result is None

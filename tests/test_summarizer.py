@@ -306,6 +306,65 @@ def test_get_user_timezone_exception_fallback() -> None:
     assert timezone_result is UTC
 
 
+def test_get_user_timezone_syncs_from_slack_when_no_record() -> None:
+    """Test that _get_user_timezone syncs from Slack when no user record exists."""
+    from unittest.mock import MagicMock, patch
+
+    # Mock user settings store with no timezone
+    mock_settings_store = MagicMock()
+    mock_settings_store.get_user_settings.return_value = {}
+
+    # Mock successful Slack sync
+    mock_sync_function = MagicMock(return_value='America/New_York')
+
+    # Import the helper function
+    from companion_memory.summarizer import _get_user_timezone
+
+    with (
+        patch('companion_memory.user_settings.DynamoUserSettingsStore', return_value=mock_settings_store),
+        patch('companion_memory.user_sync.sync_user_timezone_from_slack', mock_sync_function),
+    ):
+        timezone_result = _get_user_timezone('U123456789')
+
+    # Verify timezone is correct
+    import zoneinfo
+
+    assert isinstance(timezone_result, zoneinfo.ZoneInfo)
+    assert str(timezone_result) == 'America/New_York'
+
+    # Verify sync function was called
+    mock_sync_function.assert_called_once_with('U123456789')
+
+
+def test_get_user_timezone_fallback_when_slack_sync_fails() -> None:
+    """Test that _get_user_timezone falls back to UTC when Slack sync fails."""
+    from unittest.mock import MagicMock, patch
+
+    # Mock user settings store with no timezone
+    mock_settings_store = MagicMock()
+    mock_settings_store.get_user_settings.return_value = {}
+
+    # Mock failed Slack sync
+    mock_sync_function = MagicMock(return_value=None)
+
+    # Import the helper function
+    from companion_memory.summarizer import _get_user_timezone
+
+    with (
+        patch('companion_memory.user_settings.DynamoUserSettingsStore', return_value=mock_settings_store),
+        patch('companion_memory.user_sync.sync_user_timezone_from_slack', mock_sync_function),
+    ):
+        timezone_result = _get_user_timezone('U123456789')
+
+    # Verify falls back to UTC
+    from datetime import UTC
+
+    assert timezone_result is UTC
+
+    # Verify sync function was called
+    mock_sync_function.assert_called_once_with('U123456789')
+
+
 def test_summarize_today_with_timezone() -> None:
     """Test that summarize_today() fetches logs for today in user's timezone."""
     from unittest.mock import patch

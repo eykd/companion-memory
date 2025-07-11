@@ -151,7 +151,10 @@ def summarize_day(user_id: str, log_store: LogStore, llm: LLMClient) -> str:
 
 
 def _get_user_timezone(user_id: str) -> timezone | zoneinfo.ZoneInfo:
-    """Get user's timezone from DynamoDB user settings, with fallback to UTC.
+    """Get user's timezone from DynamoDB user settings, with fallback to Slack sync and UTC.
+
+    If no user record exists in DynamoDB, attempts to sync timezone from Slack API
+    and create the user record before returning the timezone.
 
     Args:
         user_id: The user identifier
@@ -165,7 +168,18 @@ def _get_user_timezone(user_id: str) -> timezone | zoneinfo.ZoneInfo:
 
         settings_store = DynamoUserSettingsStore()
         user_settings = settings_store.get_user_settings(user_id)
-        user_tz_name = user_settings.get('timezone', 'UTC')
+
+        # Check if user has timezone setting
+        user_tz_name = user_settings.get('timezone')
+
+        # If no timezone found, try to sync from Slack
+        if not user_tz_name:
+            from companion_memory.user_sync import sync_user_timezone_from_slack
+
+            user_tz_name = sync_user_timezone_from_slack(user_id)
+            if not user_tz_name:
+                # Could not sync from Slack, fall back to UTC
+                return UTC
 
         if user_tz_name == 'UTC':
             return UTC
@@ -176,7 +190,7 @@ def _get_user_timezone(user_id: str) -> timezone | zoneinfo.ZoneInfo:
             return UTC
 
     except Exception:  # noqa: BLE001
-        # Fall back to UTC if any error occurs with DynamoDB
+        # Fall back to UTC if any error occurs with DynamoDB or Slack sync
         return UTC
 
 

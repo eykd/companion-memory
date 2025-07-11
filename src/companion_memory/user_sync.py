@@ -8,6 +8,43 @@ from companion_memory.user_settings import DynamoUserSettingsStore
 logger = logging.getLogger(__name__)
 
 
+def sync_user_timezone_from_slack(user_id: str) -> str | None:
+    """Sync a specific user's timezone from Slack to DynamoDB user settings.
+
+    Args:
+        user_id: The Slack user ID to sync timezone for
+
+    Returns:
+        The timezone string if successfully synced, None otherwise
+
+    """
+    # Import here to avoid circular import
+    from companion_memory.scheduler import get_slack_client
+
+    try:
+        slack_client = get_slack_client()
+        response = slack_client.users_info(user=user_id)
+        if not response.get('ok'):
+            logger.warning('Failed to fetch user info from Slack for user %s: %s', user_id, response)
+            return None
+
+        user = response['user']
+        timezone = user.get('tz')
+        if not timezone:
+            logger.info('No time zone found in Slack profile for user %s', user_id)
+            return None
+
+        settings_store = DynamoUserSettingsStore()
+        settings_store.update_user_settings(user_id, {'timezone': timezone})
+        logger.info('Synced user %s timezone to %s from Slack to DynamoDB', user_id, timezone)
+
+    except Exception:
+        logger.exception('Error syncing user timezone from Slack for user %s', user_id)
+        return None
+    else:
+        return str(timezone)
+
+
 def sync_user_timezone() -> None:
     """Sync the user's time zone from Slack to DynamoDB user settings.
 
@@ -19,22 +56,4 @@ def sync_user_timezone() -> None:
         logger.warning('SLACK_USER_ID environment variable not set; cannot sync time zone')
         return
 
-    # Import here to avoid circular import
-    from companion_memory.scheduler import get_slack_client
-
-    slack_client = get_slack_client()
-    try:
-        response = slack_client.users_info(user=slack_user_id)
-        if not response.get('ok'):
-            logger.warning('Failed to fetch user info from Slack: %s', response)
-            return
-        user = response['user']
-        timezone = user.get('tz')
-        if not timezone:
-            logger.info('No time zone found in Slack profile for user %s', slack_user_id)
-            return
-        settings_store = DynamoUserSettingsStore()
-        settings_store.update_user_settings(slack_user_id, {'timezone': timezone})
-        logger.info('Updated user %s time zone to %s in DynamoDB', slack_user_id, timezone)
-    except Exception:
-        logger.exception('Error syncing user time zone from Slack')
+    sync_user_timezone_from_slack(slack_user_id)
