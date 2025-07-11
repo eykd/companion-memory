@@ -87,9 +87,8 @@ class DeduplicationIndex:
             True if job was scheduled, False if skipped due to deduplication
 
         """
-        job_sk = make_job_sk(job.scheduled_for, job.job_id)
-
         # Try to reserve the deduplication slot
+        job_sk = make_job_sk(job.scheduled_for, job.job_id)
         if self.try_reserve(logical_id, date, 'job', job_sk):
             # Reservation succeeded, store the actual job
             job_table.put_job(job)
