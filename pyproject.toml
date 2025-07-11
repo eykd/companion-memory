@@ -236,6 +236,7 @@ dev = [
     "ipython>=9.4.0",
 ]
 test = [
+    "moto[dynamodb]>=5.0.0",
     "mypy>=1.16.1",
     "pytest>=8.4.1",
     "pytest-cov>=6.2.1",
