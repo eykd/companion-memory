@@ -46,6 +46,9 @@ def create_app(
     # Initialize distributed scheduler (coordinates across workers/containers via DynamoDB)
     if enable_scheduler:
         scheduler = get_scheduler()
+        # Configure dependencies for scheduled jobs (if available)
+        if llm is not None:
+            scheduler.configure_dependencies(log_store, llm)
         scheduler.start()  # Always starts successfully - workers compete for DynamoDB lock
         app.logger.info('Distributed scheduler infrastructure started - competing for lock')
 

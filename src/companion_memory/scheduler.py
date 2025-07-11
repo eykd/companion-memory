@@ -13,6 +13,9 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from botocore.exceptions import ClientError
 from slack_sdk import WebClient
 
+from companion_memory.storage import LogStore
+from companion_memory.summarizer import LLMClient
+
 logger = logging.getLogger(__name__)
 
 
@@ -181,6 +184,8 @@ class DistributedScheduler:
         self.started = False
         self._lock_check_interval = 30  # Check lock every 30 seconds
         self._jobs_added = False  # Track if we've added active jobs
+        self._log_store: LogStore | None = None  # Will be injected by Flask app
+        self._llm: LLMClient | None = None  # Will be injected by Flask app
 
     def start(self) -> bool:
         """Start the scheduler and begin competing for the distributed lock.
@@ -237,6 +242,11 @@ class DistributedScheduler:
         # Schedule heartbeat logger
         self.scheduler.add_job(self._heartbeat_logger, 'interval', seconds=60, id='heartbeat_logger', max_instances=1)
 
+        # Schedule daily summary checker (runs hourly to check for 7am in user timezones)
+        self.scheduler.add_job(
+            self._check_daily_summaries, 'interval', hours=1, id='daily_summary_checker', max_instances=1
+        )
+
         self._jobs_added = True
         logger.info('Added active scheduler jobs')
 
@@ -249,6 +259,10 @@ class DistributedScheduler:
         with contextlib.suppress(Exception):
             self.scheduler.remove_job('heartbeat_logger')
 
+        # Remove daily summary checker
+        with contextlib.suppress(Exception):
+            self.scheduler.remove_job('daily_summary_checker')
+
         self._jobs_added = False
         logger.info('Removed active scheduler jobs')
 
@@ -257,6 +271,34 @@ class DistributedScheduler:
         # Double-check we still have the lock before logging
         if self.lock.lock_acquired:
             logger.info('Scheduler heartbeat - process %s active', self.lock.process_id)
+
+    def _check_daily_summaries(self) -> None:
+        """Check and send daily summaries if it's 7am in any user's timezone."""
+        # Double-check we still have the lock before processing
+        if not self.lock.lock_acquired:
+            return
+
+        if self._log_store is None or self._llm is None:
+            logger.warning('Daily summaries not configured - missing log_store or llm')
+            return
+
+        try:
+            from companion_memory.summarizer import check_and_send_daily_summaries
+
+            check_and_send_daily_summaries(self._log_store, self._llm)
+        except Exception:
+            logger.exception('Error checking daily summaries')
+
+    def configure_dependencies(self, log_store: LogStore, llm: LLMClient) -> None:
+        """Configure log store and LLM dependencies for scheduler jobs.
+
+        Args:
+            log_store: Storage implementation for fetching logs
+            llm: LLM client for generating summaries
+
+        """
+        self._log_store = log_store
+        self._llm = llm
 
     def add_job(self, func: Callable[..., Any], trigger: str, **kwargs: str | int | bool | None) -> None:
         """Add a job to the scheduler (only executes if this worker holds the lock).

@@ -121,14 +121,14 @@ def test_send_summary_message_combines_summaries_and_sends_slack() -> None:
     mock_llm = MagicMock()
     mock_llm.complete.side_effect = [
         'Weekly summary: Focused on testing and development.',
-        'Daily summary: Attended meetings and completed code reviews.',
+        'Yesterday summary: Attended meetings and completed code reviews.',
     ]
 
     # Mock Slack client
     mock_slack_client = MagicMock()
 
     # Test send_summary_message
-    with patch('companion_memory.summarizer.get_slack_client', return_value=mock_slack_client):
+    with patch('companion_memory.scheduler.get_slack_client', return_value=mock_slack_client):
         send_summary_message(user_id='U123456789', log_store=mock_log_store, llm=mock_llm)
 
     # Verify LLM was called twice (for week and day summaries)
@@ -144,7 +144,7 @@ def test_send_summary_message_combines_summaries_and_sends_slack() -> None:
     # Check message contains both summaries
     message_text = call_args[1]['text']
     assert 'Weekly summary: Focused on testing and development.' in message_text
-    assert 'Daily summary: Attended meetings and completed code reviews.' in message_text
+    assert 'Yesterday summary: Attended meetings and completed code reviews.' in message_text
 
 
 def test_summarize_yesterday_with_timezone() -> None:
@@ -213,7 +213,7 @@ def test_get_user_timezone_success() -> None:
     # Import the helper function
     from companion_memory.summarizer import _get_user_timezone
 
-    with patch('companion_memory.summarizer.get_slack_client', return_value=mock_slack_client):
+    with patch('companion_memory.scheduler.get_slack_client', return_value=mock_slack_client):
         timezone_result = _get_user_timezone('U123456789')
 
     # Verify timezone is correct
@@ -237,7 +237,7 @@ def test_get_user_timezone_fallback_to_utc() -> None:
     # Import the helper function
     from companion_memory.summarizer import _get_user_timezone
 
-    with patch('companion_memory.summarizer.get_slack_client', return_value=mock_slack_client):
+    with patch('companion_memory.scheduler.get_slack_client', return_value=mock_slack_client):
         timezone_result = _get_user_timezone('U123456789')
 
     # Verify falls back to UTC
@@ -257,7 +257,7 @@ def test_get_user_timezone_invalid_timezone_fallback() -> None:
     # Import the helper function
     from companion_memory.summarizer import _get_user_timezone
 
-    with patch('companion_memory.summarizer.get_slack_client', return_value=mock_slack_client):
+    with patch('companion_memory.scheduler.get_slack_client', return_value=mock_slack_client):
         timezone_result = _get_user_timezone('U123456789')
 
     # Verify falls back to UTC
@@ -277,7 +277,7 @@ def test_get_user_timezone_utc_string_returns_utc() -> None:
     # Import the helper function
     from companion_memory.summarizer import _get_user_timezone
 
-    with patch('companion_memory.summarizer.get_slack_client', return_value=mock_slack_client):
+    with patch('companion_memory.scheduler.get_slack_client', return_value=mock_slack_client):
         timezone_result = _get_user_timezone('U123456789')
 
     # Verify returns UTC
@@ -297,7 +297,7 @@ def test_get_user_timezone_exception_fallback() -> None:
     # Import the helper function
     from companion_memory.summarizer import _get_user_timezone
 
-    with patch('companion_memory.summarizer.get_slack_client', return_value=mock_slack_client):
+    with patch('companion_memory.scheduler.get_slack_client', return_value=mock_slack_client):
         timezone_result = _get_user_timezone('U123456789')
 
     # Verify falls back to UTC
@@ -383,3 +383,214 @@ def test_format_log_entries_with_no_timezone_defaults_to_utc() -> None:
     # Verify timestamps are formatted in UTC
     assert '2024-01-15 10:00:00: Working on tests' in result
     assert '2024-01-15 14:00:00: Debugging code' in result
+
+
+def test_send_daily_summary_to_users_no_users_configured() -> None:
+    """Test send_daily_summary_to_users when no users are configured."""
+    from unittest.mock import MagicMock, patch
+
+    from companion_memory.summarizer import send_daily_summary_to_users
+
+    mock_log_store = MagicMock()
+    mock_llm = MagicMock()
+
+    with patch.dict('os.environ', {}, clear=True):
+        send_daily_summary_to_users(mock_log_store, mock_llm)
+
+    # Should not call any functions
+    mock_llm.complete.assert_not_called()
+
+
+def test_send_daily_summary_to_users_with_users() -> None:
+    """Test send_daily_summary_to_users with configured users."""
+    from unittest.mock import MagicMock, patch
+
+    from companion_memory.summarizer import send_daily_summary_to_users
+
+    mock_log_store = MagicMock()
+    mock_llm = MagicMock()
+    mock_slack_client = MagicMock()
+
+    with (
+        patch.dict('os.environ', {'DAILY_SUMMARY_USERS': 'U123,U456,U789'}),
+        patch('companion_memory.scheduler.get_slack_client', return_value=mock_slack_client),
+        patch('companion_memory.summarizer._get_user_timezone', return_value=UTC),
+    ):
+        send_daily_summary_to_users(mock_log_store, mock_llm)
+
+    # Should send messages to all 3 users
+    assert mock_slack_client.chat_postMessage.call_count == 3
+
+
+def test_check_and_send_daily_summaries_no_users() -> None:
+    """Test check_and_send_daily_summaries when no users are configured."""
+    from unittest.mock import MagicMock, patch
+
+    from companion_memory.summarizer import check_and_send_daily_summaries
+
+    mock_log_store = MagicMock()
+    mock_llm = MagicMock()
+
+    with patch.dict('os.environ', {}, clear=True):
+        check_and_send_daily_summaries(mock_log_store, mock_llm)
+
+    # Should not call any functions
+    mock_llm.complete.assert_not_called()
+
+
+def test_check_and_send_daily_summaries_not_7am() -> None:
+    """Test check_and_send_daily_summaries when it's not 7am for any user."""
+    from datetime import UTC, datetime
+    from unittest.mock import MagicMock, patch
+
+    from companion_memory.summarizer import check_and_send_daily_summaries
+
+    mock_log_store = MagicMock()
+    mock_llm = MagicMock()
+    mock_slack_client = MagicMock()
+
+    # Mock current time as 3am UTC
+    mock_utc_time = datetime(2024, 1, 15, 3, 0, 0, tzinfo=UTC)
+
+    with (
+        patch.dict('os.environ', {'DAILY_SUMMARY_USERS': 'U123'}),
+        patch('companion_memory.summarizer.datetime') as mock_datetime,
+        patch('companion_memory.summarizer._get_user_timezone', return_value=UTC),
+        patch('companion_memory.scheduler.get_slack_client', return_value=mock_slack_client),
+    ):
+        mock_datetime.now.return_value = mock_utc_time
+        check_and_send_daily_summaries(mock_log_store, mock_llm)
+
+    # Should not send any messages since it's 3am, not 7am
+    mock_slack_client.chat_postMessage.assert_not_called()
+
+
+def test_check_and_send_daily_summaries_is_7am() -> None:
+    """Test check_and_send_daily_summaries when it's 7am for a user."""
+    from datetime import UTC, datetime
+    from unittest.mock import MagicMock, patch
+
+    from companion_memory.summarizer import check_and_send_daily_summaries
+
+    mock_log_store = MagicMock()
+    mock_llm = MagicMock()
+    mock_slack_client = MagicMock()
+
+    # Mock current time as 7am UTC
+    mock_utc_time = datetime(2024, 1, 15, 7, 0, 0, tzinfo=UTC)
+
+    with (
+        patch.dict('os.environ', {'DAILY_SUMMARY_USERS': 'U123'}),
+        patch('companion_memory.summarizer.datetime') as mock_datetime,
+        patch('companion_memory.summarizer._get_user_timezone', return_value=UTC),
+        patch('companion_memory.scheduler.get_slack_client', return_value=mock_slack_client),
+    ):
+        mock_datetime.now.return_value = mock_utc_time
+        check_and_send_daily_summaries(mock_log_store, mock_llm)
+
+    # Should send message since it's 7am
+    mock_slack_client.chat_postMessage.assert_called_once()
+
+
+def test_send_daily_summary_to_users_empty_users_list() -> None:
+    """Test send_daily_summary_to_users with empty users list after parsing."""
+    from unittest.mock import MagicMock, patch
+
+    from companion_memory.summarizer import send_daily_summary_to_users
+
+    mock_log_store = MagicMock()
+    mock_llm = MagicMock()
+
+    # Set environment with only commas and whitespace (no valid user IDs)
+    with patch.dict('os.environ', {'DAILY_SUMMARY_USERS': ' , , '}):
+        send_daily_summary_to_users(mock_log_store, mock_llm)
+
+    # Should not call any functions since no valid user IDs
+    mock_llm.complete.assert_not_called()
+
+
+def test_send_daily_summary_to_users_exception_during_send() -> None:
+    """Test send_daily_summary_to_users when send_summary_message raises exception."""
+    from unittest.mock import MagicMock, patch
+
+    from companion_memory.summarizer import send_daily_summary_to_users
+
+    mock_log_store = MagicMock()
+    mock_llm = MagicMock()
+    mock_slack_client = MagicMock()
+
+    with (
+        patch.dict('os.environ', {'DAILY_SUMMARY_USERS': 'U123'}),
+        patch('companion_memory.scheduler.get_slack_client', return_value=mock_slack_client),
+        patch('companion_memory.summarizer._get_user_timezone', return_value=UTC),
+        patch('companion_memory.summarizer.send_summary_message', side_effect=Exception('Send failed')),
+    ):
+        # Should not raise exception - errors are caught and logged
+        send_daily_summary_to_users(mock_log_store, mock_llm)
+
+
+def test_check_and_send_daily_summaries_empty_users_list() -> None:
+    """Test check_and_send_daily_summaries with empty users list after parsing."""
+    from unittest.mock import MagicMock, patch
+
+    from companion_memory.summarizer import check_and_send_daily_summaries
+
+    mock_log_store = MagicMock()
+    mock_llm = MagicMock()
+
+    # Set environment with only commas and whitespace (no valid user IDs)
+    with patch.dict('os.environ', {'DAILY_SUMMARY_USERS': ' , , '}):
+        check_and_send_daily_summaries(mock_log_store, mock_llm)
+
+    # Should not call any functions since no valid user IDs
+    mock_llm.complete.assert_not_called()
+
+
+def test_check_and_send_daily_summaries_timezone_exception() -> None:
+    """Test check_and_send_daily_summaries when timezone check raises exception."""
+    from datetime import UTC, datetime
+    from unittest.mock import MagicMock, patch
+
+    from companion_memory.summarizer import check_and_send_daily_summaries
+
+    mock_log_store = MagicMock()
+    mock_llm = MagicMock()
+    mock_slack_client = MagicMock()
+    mock_utc_time = datetime(2024, 1, 15, 7, 0, 0, tzinfo=UTC)
+
+    with (
+        patch.dict('os.environ', {'DAILY_SUMMARY_USERS': 'U123'}),
+        patch('companion_memory.summarizer.datetime') as mock_datetime,
+        patch('companion_memory.summarizer._get_user_timezone', side_effect=Exception('Timezone error')),
+        patch('companion_memory.scheduler.get_slack_client', return_value=mock_slack_client),
+    ):
+        mock_datetime.now.return_value = mock_utc_time
+        # Should not raise exception - errors are caught and logged
+        check_and_send_daily_summaries(mock_log_store, mock_llm)
+
+    # Should not send any messages due to timezone exception
+    mock_slack_client.chat_postMessage.assert_not_called()
+
+
+def test_check_and_send_daily_summaries_send_exception() -> None:
+    """Test check_and_send_daily_summaries when sending summary raises exception."""
+    from datetime import UTC, datetime
+    from unittest.mock import MagicMock, patch
+
+    from companion_memory.summarizer import check_and_send_daily_summaries
+
+    mock_log_store = MagicMock()
+    mock_llm = MagicMock()
+    mock_slack_client = MagicMock()
+    mock_utc_time = datetime(2024, 1, 15, 7, 0, 0, tzinfo=UTC)
+
+    with (
+        patch.dict('os.environ', {'DAILY_SUMMARY_USERS': 'U123'}),
+        patch('companion_memory.summarizer.datetime') as mock_datetime,
+        patch('companion_memory.summarizer._get_user_timezone', return_value=UTC),
+        patch('companion_memory.scheduler.get_slack_client', return_value=mock_slack_client),
+        patch('companion_memory.summarizer.send_summary_message', side_effect=Exception('Send failed')),
+    ):
+        mock_datetime.now.return_value = mock_utc_time
+        # Should not raise exception - errors are caught and logged
+        check_and_send_daily_summaries(mock_log_store, mock_llm)

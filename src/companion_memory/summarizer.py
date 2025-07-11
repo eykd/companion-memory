@@ -1,12 +1,15 @@
 """Log summarization functionality using LLM."""
 
+import logging
 import zoneinfo
 from datetime import UTC, datetime, timedelta, timezone
 from textwrap import dedent
 from typing import Any, Protocol
 
-from companion_memory.scheduler import get_slack_client
+# Import moved to function level to avoid circular import
 from companion_memory.storage import LogStore
+
+logger = logging.getLogger(__name__)
 
 
 class LLMClient(Protocol):
@@ -158,6 +161,8 @@ def _get_user_timezone(user_id: str) -> timezone | zoneinfo.ZoneInfo:
 
     """
     try:
+        from companion_memory.scheduler import get_slack_client
+
         slack_client = get_slack_client()
         user_info = slack_client.users_info(user=user_id)
 
@@ -274,7 +279,7 @@ def _format_summary_message(weekly_summary: str, daily_summary: str) -> str:
         **This Week:**
         {weekly_summary}
 
-        **Today:**
+        **Yesterday:**
         {daily_summary}
         """
     )
@@ -289,13 +294,106 @@ def send_summary_message(user_id: str, log_store: LogStore, llm: LLMClient) -> N
         llm: LLM client for generating summaries
 
     """
-    # Generate both weekly and daily summaries
+    # Generate both weekly and yesterday summaries for morning delivery
     weekly_summary = summarize_week(user_id, log_store, llm)
-    daily_summary = summarize_day(user_id, log_store, llm)
+    daily_summary = summarize_yesterday(user_id, log_store, llm)
 
     # Format combined message
     message = _format_summary_message(weekly_summary, daily_summary)
 
     # Send via Slack
+    from companion_memory.scheduler import get_slack_client
+
     slack_client = get_slack_client()
     slack_client.chat_postMessage(channel=user_id, text=message)
+
+
+def send_daily_summary_to_users(log_store: LogStore, llm: LLMClient) -> None:
+    """Send daily summaries to all configured users.
+
+    Gets the list of users from DAILY_SUMMARY_USERS environment variable
+    and sends daily summaries to each user.
+
+    Args:
+        log_store: Storage implementation for fetching logs
+        llm: LLM client for generating summaries
+
+    """
+    import os
+
+    users_env = os.environ.get('DAILY_SUMMARY_USERS', '')
+    if not users_env:
+        logger.info('No users configured for daily summaries (DAILY_SUMMARY_USERS not set)')
+        return
+
+    # Parse comma-separated user IDs
+    user_ids = [user_id.strip() for user_id in users_env.split(',') if user_id.strip()]
+
+    if not user_ids:
+        logger.info('No valid user IDs found in DAILY_SUMMARY_USERS')
+        return
+
+    logger.info('Sending daily summaries to %d users: %s', len(user_ids), ', '.join(user_ids))
+
+    for user_id in user_ids:
+        try:
+            send_summary_message(user_id, log_store, llm)
+            logger.info('Successfully sent daily summary to user %s', user_id)
+        except Exception:
+            logger.exception('Failed to send daily summary to user %s', user_id)
+
+
+def check_and_send_daily_summaries(log_store: LogStore, llm: LLMClient) -> None:
+    """Check if it's 7am in any user's timezone and send daily summaries.
+
+    This function should be called hourly. It checks each configured user's
+    timezone and sends daily summaries to users for whom it's currently 7am.
+
+    Args:
+        log_store: Storage implementation for fetching logs
+        llm: LLM client for generating summaries
+
+    """
+    import os
+
+    users_env = os.environ.get('DAILY_SUMMARY_USERS', '')
+    if not users_env:
+        return
+
+    # Parse comma-separated user IDs
+    user_ids = [user_id.strip() for user_id in users_env.split(',') if user_id.strip()]
+
+    if not user_ids:
+        return
+
+    current_utc = datetime.now(UTC)
+    users_to_notify = []
+
+    for user_id in user_ids:
+        try:
+            # Get user's timezone
+            user_tz = _get_user_timezone(user_id)
+
+            # Convert current UTC time to user's timezone
+            user_local_time = current_utc.astimezone(user_tz)
+
+            # Check if it's 7am in the user's timezone (within the current hour)
+            if user_local_time.hour == 7:
+                users_to_notify.append(user_id)
+
+        except Exception:
+            logger.exception('Failed to check timezone for user %s', user_id)
+
+    if users_to_notify:
+        logger.info(
+            'Sending daily summaries to %d users at 7am local time: %s',
+            len(users_to_notify),
+            ', '.join(users_to_notify),
+        )
+
+        for user_id in users_to_notify:
+            try:
+                send_summary_message(user_id, log_store, llm)
+                logger.info('Successfully sent daily summary to user %s', user_id)
+            except Exception:
+                logger.exception('Failed to send daily summary to user %s', user_id)
