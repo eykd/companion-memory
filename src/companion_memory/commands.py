@@ -2,6 +2,7 @@
 
 import logging
 import os
+import time
 
 import click
 
@@ -90,3 +91,71 @@ def test_slack_connection(user_id: str | None = None) -> bool:  # noqa: PT028
         return False
     else:
         return True
+
+
+def run_job_worker(
+    polling_limit: int = 25,
+    lock_timeout_minutes: int = 10,
+    max_attempts: int = 5,
+    poll_interval_seconds: int = 30,
+) -> None:
+    """Run the job worker to process scheduled jobs.
+
+    Args:
+        polling_limit: Maximum number of jobs to fetch per poll
+        lock_timeout_minutes: How long to hold job locks
+        max_attempts: Maximum retry attempts before dead letter
+        poll_interval_seconds: Seconds to wait between polling cycles
+
+    """
+    from companion_memory.job_table import JobTable
+    from companion_memory.job_worker import JobWorker
+
+    logger = logging.getLogger(__name__)
+
+    click.echo('Starting job worker...')
+    click.echo('Configuration:')
+    click.echo(f'  Polling limit: {polling_limit}')
+    click.echo(f'  Lock timeout: {lock_timeout_minutes} minutes')
+    click.echo(f'  Max attempts: {max_attempts}')
+    click.echo(f'  Poll interval: {poll_interval_seconds} seconds')
+
+    # Setup job infrastructure
+    job_table = JobTable()
+    worker = JobWorker(
+        job_table=job_table,
+        polling_limit=polling_limit,
+        lock_timeout_minutes=lock_timeout_minutes,
+        max_attempts=max_attempts,
+    )
+
+    # TODO: Register job handlers here
+    # Example: worker.register_handler('daily_summary', DailySummaryHandler)
+
+    click.echo('Job worker started. Press Ctrl+C to stop.')
+    logger.info(
+        'Job worker started with polling_limit=%d, lock_timeout=%d minutes', polling_limit, lock_timeout_minutes
+    )
+
+    try:
+        while True:
+            try:
+                processed_count = worker.poll_and_process_jobs()
+                if processed_count > 0:
+                    click.echo(f'Processed {processed_count} jobs')
+                    logger.info('Processed %d jobs', processed_count)
+
+                time.sleep(poll_interval_seconds)
+
+            except KeyboardInterrupt:
+                raise
+            except Exception:
+                logger.exception('Error during job processing cycle')
+                click.echo('Error during job processing - see logs for details')
+                time.sleep(poll_interval_seconds)
+
+    except KeyboardInterrupt:
+        click.echo('\nShutting down job worker...')
+        logger.info('Job worker shutting down due to keyboard interrupt')
+
+    click.echo('Job worker stopped.')

@@ -2,7 +2,7 @@
 
 import click
 
-from companion_memory.commands import run_scheduler, run_web_server, test_slack_connection
+from companion_memory.commands import run_job_worker, run_scheduler, run_web_server, test_slack_connection
 
 
 @click.group()
@@ -51,3 +51,22 @@ def slack_test(user_id: str | None) -> None:
         click.echo('  • Invalid bot token or insufficient permissions')
         click.echo('  • Invalid user ID or bot cannot send DMs to user')
         raise click.ClickException('Slack connection test failed')
+
+
+@cli.command('job-worker')
+@click.option('--polling-limit', default=25, help='Maximum number of jobs to fetch per poll')
+@click.option('--lock-timeout', default=10, help='How long to hold job locks (minutes)')
+@click.option('--max-attempts', default=5, help='Maximum retry attempts before dead letter')
+@click.option('--poll-interval', default=30, help='Seconds to wait between polling cycles')
+def job_worker(polling_limit: int, lock_timeout: int, max_attempts: int, poll_interval: int) -> None:
+    """Run the job worker to process scheduled jobs.
+
+    The job worker polls the DynamoDB table for due jobs and processes them
+    using registered handlers. Failed jobs are retried with exponential backoff.
+    """
+    run_job_worker(
+        polling_limit=polling_limit,
+        lock_timeout_minutes=lock_timeout,
+        max_attempts=max_attempts,
+        poll_interval_seconds=poll_interval,
+    )
