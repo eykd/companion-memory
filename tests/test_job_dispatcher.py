@@ -102,7 +102,7 @@ def test_dispatcher_validates_payload() -> None:
     )
 
     # Dispatch should raise validation error
-    with pytest.raises(ValueError, match='Payload validation failed'):
+    with pytest.raises(ValueError, match='Payload validation failed for job type'):
         dispatcher.dispatch(invalid_job)
 
 

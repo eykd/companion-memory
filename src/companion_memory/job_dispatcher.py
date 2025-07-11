@@ -65,8 +65,7 @@ class JobDispatcher:
         """
         # Check if handler is registered
         if job.job_type not in self._handlers:
-            error_message = f'No handler registered for job type: {job.job_type}'
-            raise ValueError(error_message)
+            raise ValueError('No handler registered for job type', job.job_type)
 
         handler_class = self._handlers[job.job_type]
 
@@ -75,8 +74,7 @@ class JobDispatcher:
             payload_model = handler_class.payload_model()
             validated_payload = payload_model.model_validate(job.payload)
         except ValidationError as e:
-            error_message = f'Payload validation failed for job type {job.job_type}: {e}'
-            raise ValueError(error_message) from e
+            raise ValueError('Payload validation failed for job type', job.job_type) from e
 
         # Create handler instance and process job
         handler_instance = handler_class()
