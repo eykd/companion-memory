@@ -56,3 +56,8 @@ class RetryPolicy:
 
         """
         return attempts < self._max_attempts
+
+    @property
+    def max_attempts(self) -> int:
+        """Get the maximum number of attempts."""
+        return self._max_attempts
