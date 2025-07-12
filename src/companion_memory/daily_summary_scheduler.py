@@ -30,3 +30,23 @@ def get_next_7am_utc(user_tz: ZoneInfo, now_utc: datetime) -> datetime:
 
     # Convert back to UTC
     return next_7am_local.astimezone(UTC)
+
+
+def make_daily_summary_job_id(user_id: str, user_tz: ZoneInfo, local_7am_utc: datetime) -> str:
+    """Generate a logical job ID for daily summary scheduling.
+
+    Args:
+        user_id: Slack user ID
+        user_tz: User's timezone as ZoneInfo
+        local_7am_utc: The UTC datetime representing 7:00 AM in the user's timezone
+
+    Returns:
+        Job ID in format: daily_summary#<user_id>#<YYYY-MM-DD>
+        where the date is the local date in the user's timezone
+
+    """
+    # Convert UTC time back to user's local time to get the local date
+    local_7am = local_7am_utc.astimezone(user_tz)
+    local_date = local_7am.date().isoformat()
+
+    return f'daily_summary#{user_id}#{local_date}'

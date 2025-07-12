@@ -96,3 +96,37 @@ def test_get_next_7am_utc_different_timezone() -> None:
     # Should be 7:00 AM JST = 22:00 UTC previous day
     expected = datetime(2025, 1, 14, 22, 0, tzinfo=UTC)
     assert result == expected
+
+
+def test_make_daily_summary_job_id() -> None:
+    """Test generating daily summary job ID from user and local date."""
+    from companion_memory.daily_summary_scheduler import make_daily_summary_job_id
+
+    user_id = 'U12345'
+    user_tz = ZoneInfo('America/New_York')
+
+    # 7:00 AM EST on 2025-01-15 (which is 12:00 UTC)
+    local_7am_utc = datetime(2025, 1, 15, 12, 0, tzinfo=UTC)
+
+    result = make_daily_summary_job_id(user_id, user_tz, local_7am_utc)
+
+    # Should extract the local date (2025-01-15) from the UTC time
+    expected = 'daily_summary#U12345#2025-01-15'
+    assert result == expected
+
+
+def test_make_daily_summary_job_id_timezone_crossing() -> None:
+    """Test job ID generation when UTC and local dates differ."""
+    from companion_memory.daily_summary_scheduler import make_daily_summary_job_id
+
+    user_id = 'U67890'
+    user_tz = ZoneInfo('Asia/Tokyo')
+
+    # 7:00 AM JST on 2025-01-15 is 22:00 UTC on 2025-01-14
+    local_7am_utc = datetime(2025, 1, 14, 22, 0, tzinfo=UTC)
+
+    result = make_daily_summary_job_id(user_id, user_tz, local_7am_utc)
+
+    # Should use the local date (2025-01-15) not the UTC date (2025-01-14)
+    expected = 'daily_summary#U67890#2025-01-15'
+    assert result == expected
