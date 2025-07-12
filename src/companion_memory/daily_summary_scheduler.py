@@ -6,6 +6,8 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
+from pydantic import BaseModel, Field
+
 if TYPE_CHECKING:  # pragma: no cover
     from companion_memory.deduplication import DeduplicationIndex
     from companion_memory.job_table import JobTable
@@ -127,3 +129,50 @@ def schedule_daily_summaries(
 
             # Store the job
             job_table.put_job(job)
+
+
+class DailySummaryPayload(BaseModel):
+    """Payload model for daily summary jobs."""
+
+    user_id: str = Field(description='Slack user ID to send summary to')
+
+
+class DailySummaryHandler:
+    """Handler for daily summary jobs."""
+
+    @classmethod
+    def payload_model(cls) -> type[BaseModel]:
+        """Return the payload model for this handler."""
+        return DailySummaryPayload
+
+    def handle(self, payload: BaseModel) -> None:
+        """Process a daily summary job.
+
+        Args:
+            payload: Validated payload containing user_id
+
+        """
+        # The payload is already validated as DailySummaryPayload by the job dispatcher
+        if not isinstance(payload, DailySummaryPayload):
+            msg = f'Expected DailySummaryPayload, got {type(payload)}'
+            raise TypeError(msg)
+
+        # For now, use a simple logging approach for the daily summary
+        # In a full implementation, this would use proper dependency injection
+        try:
+            import logging
+            from datetime import datetime
+
+            from companion_memory.summarizer import _get_user_timezone
+
+            logger = logging.getLogger(__name__)
+            user_tz = _get_user_timezone(payload.user_id)
+            now_user_tz = datetime.now(user_tz)
+
+            logger.info('Would send daily summary to user %s for %s', payload.user_id, now_user_tz.date())
+
+        except Exception:
+            import logging
+
+            logger = logging.getLogger(__name__)
+            logger.exception('Error processing daily summary for user %s', payload.user_id)

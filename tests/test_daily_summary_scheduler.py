@@ -241,3 +241,54 @@ def test_scheduler_registers_daily_summary_job() -> None:
                     break
 
             assert daily_summary_job_found, 'Daily summary scheduling job not found in scheduler jobs'
+
+
+def test_daily_summary_handler() -> None:
+    """Test that the daily summary job handler works correctly."""
+    from unittest.mock import patch
+
+    from companion_memory.daily_summary_scheduler import DailySummaryHandler, DailySummaryPayload
+
+    # Mock the timezone function and logging
+    with (
+        patch('companion_memory.summarizer._get_user_timezone') as mock_get_tz,
+        patch('logging.getLogger') as mock_get_logger,
+    ):
+        from zoneinfo import ZoneInfo
+
+        mock_get_tz.return_value = ZoneInfo('America/New_York')
+        mock_logger = MagicMock()
+        mock_get_logger.return_value = mock_logger
+
+        # Create the handler instance
+        handler = DailySummaryHandler()
+
+        # Test the handler with a valid payload
+        payload = DailySummaryPayload(user_id='user123')
+
+        handler.handle(payload)
+
+        # Verify timezone was fetched and logging occurred
+        mock_get_tz.assert_called_once_with('user123')
+        mock_logger.info.assert_called_once()
+
+        # Check that the log message format is correct
+        log_call_args = mock_logger.info.call_args[0]
+        assert log_call_args[0] == 'Would send daily summary to user %s for %s'
+        assert log_call_args[1] == 'user123'
+
+
+def test_daily_summary_handler_type_error() -> None:
+    """Test that the handler raises TypeError for invalid payload type."""
+    from pydantic import BaseModel
+
+    from companion_memory.daily_summary_scheduler import DailySummaryHandler
+
+    class WrongPayload(BaseModel):
+        wrong_field: str
+
+    handler = DailySummaryHandler()
+    wrong_payload = WrongPayload(wrong_field='test')
+
+    with pytest.raises(TypeError, match='Expected DailySummaryPayload'):
+        handler.handle(wrong_payload)
