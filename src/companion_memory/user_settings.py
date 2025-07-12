@@ -40,8 +40,12 @@ class DynamoUserSettingsStore:
             table_name: Name of the DynamoDB table to use
 
         """
+        import os
+
         self._table_name = table_name
-        self._dynamodb = boto3.resource('dynamodb')
+        # Use specified region or default to us-east-1 for testing
+        region = os.environ.get('AWS_DEFAULT_REGION', 'us-east-1')
+        self._dynamodb = boto3.resource('dynamodb', region_name=region)
         self._table = self._dynamodb.Table(table_name)
 
     def _generate_partition_key(self, user_id: str) -> str:

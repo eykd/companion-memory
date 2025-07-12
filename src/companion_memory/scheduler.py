@@ -34,7 +34,9 @@ class SchedulerLock:
         self.partition_key = 'system#scheduler'
         self.sort_key = 'lock#main'
         self.process_id = f'{os.getpid()}-{uuid.uuid4()}'
-        self.dynamodb = boto3.resource('dynamodb')
+        # Use specified region or default to us-east-1 for testing
+        region = os.environ.get('AWS_DEFAULT_REGION', 'us-east-1')
+        self.dynamodb = boto3.resource('dynamodb', region_name=region)
         self.table = self.dynamodb.Table(table_name)
         self.lock_acquired = False
 
