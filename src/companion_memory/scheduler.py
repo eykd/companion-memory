@@ -187,6 +187,9 @@ class DistributedScheduler:
         self._jobs_added = False  # Track if we've added active jobs
         self._log_store: LogStore | None = None  # Will be injected by Flask app
         self._llm: LLMClient | None = None  # Will be injected by Flask app
+        self._job_worker_enabled = True  # Enable job worker by default
+        self._job_worker_polling_interval = 30  # Poll for jobs every 30 seconds
+        self._job_worker: Any = None  # Will be lazily initialized
 
     def start(self) -> bool:
         """Start the scheduler and begin competing for the distributed lock.
@@ -251,6 +254,16 @@ class DistributedScheduler:
         # Schedule user time zone sync every 6 hours
         self.scheduler.add_job(sync_user_timezone, 'interval', hours=6, id='user_timezone_sync', max_instances=1)
 
+        # Schedule job worker polling if enabled
+        if self._job_worker_enabled:
+            self.scheduler.add_job(
+                self._poll_and_process_jobs,
+                'interval',
+                seconds=self._job_worker_polling_interval,
+                id='job_worker_poller',
+                max_instances=1,
+            )
+
         self._jobs_added = True
         logger.info('Added active scheduler jobs')
 
@@ -266,6 +279,10 @@ class DistributedScheduler:
         # Remove daily summary checker
         with contextlib.suppress(Exception):
             self.scheduler.remove_job('daily_summary_checker')
+
+        # Remove job worker poller
+        with contextlib.suppress(Exception):
+            self.scheduler.remove_job('job_worker_poller')
 
         self._jobs_added = False
         logger.info('Removed active scheduler jobs')
@@ -292,6 +309,34 @@ class DistributedScheduler:
             check_and_send_daily_summaries(self._log_store, self._llm)
         except Exception:
             logger.exception('Error checking daily summaries')
+
+    def _poll_and_process_jobs(self) -> None:
+        """Poll and process scheduled jobs from the job queue."""
+        # Double-check we still have the lock before processing
+        if not self.lock.lock_acquired:
+            return
+
+        try:
+            # Lazy initialize job worker to avoid circular imports
+            if self._job_worker is None:  # pragma: no branch
+                from companion_memory.job_table import JobTable
+                from companion_memory.job_worker import JobWorker
+
+                job_table = JobTable()
+                self._job_worker = JobWorker(job_table)
+
+                # TODO: Register job handlers here
+                # Example: self._job_worker.register_handler('daily_summary', DailySummaryHandler)
+
+                logger.info('Job worker initialized for scheduler integration')
+
+            # Poll and process jobs
+            processed_count = self._job_worker.poll_and_process_jobs()
+            if processed_count > 0:
+                logger.info('Scheduler processed %d jobs', processed_count)
+
+        except Exception:
+            logger.exception('Error in job worker polling')
 
     def configure_dependencies(self, log_store: LogStore, llm: LLMClient) -> None:
         """Configure log store and LLM dependencies for scheduler jobs.
