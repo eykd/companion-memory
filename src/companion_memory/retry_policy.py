@@ -27,7 +27,6 @@ class RetryPolicy:
             Delay timedelta for the given attempt
 
         """
-        # delay = base_delay * (2 ** (attempts - 1))
         delay_seconds = self._base_delay_seconds * (2 ** (attempts - 1))
         return timedelta(seconds=delay_seconds)
 

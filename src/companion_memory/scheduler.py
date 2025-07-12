@@ -309,7 +309,6 @@ class DistributedScheduler:
                 self._job_worker = JobWorker(job_table)
 
                 # TODO: Register job handlers here
-                # Example: self._job_worker.register_handler('daily_summary', DailySummaryHandler)
 
                 logger.info('Job worker initialized for scheduler integration')
 

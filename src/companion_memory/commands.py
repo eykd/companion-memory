@@ -130,7 +130,6 @@ def run_job_worker(  # pragma: no cover
     )
 
     # TODO: Register job handlers here
-    # Example: worker.register_handler('daily_summary', DailySummaryHandler)
 
     click.echo('Job worker started. Press Ctrl+C to stop.')  # pragma: no cover
     logger.info(  # pragma: no cover
