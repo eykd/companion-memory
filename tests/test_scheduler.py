@@ -340,8 +340,8 @@ def test_distributed_scheduler_start_success() -> None:
         assert scheduler.started is True
         mock_scheduler.start.assert_called_once()
         assert (
-            mock_scheduler.add_job.call_count == 5
-        )  # lock_manager + heartbeat + daily_summary_checker + user_timezone_sync + job_worker_poller
+            mock_scheduler.add_job.call_count == 6
+        )  # lock_manager + heartbeat + daily_summary_checker + user_timezone_sync + daily_summary_scheduler + job_worker_poller
         mock_acquire.assert_called_once()
 
 
@@ -543,10 +543,11 @@ def test_distributed_scheduler_remove_active_jobs() -> None:
         # Call the method
         scheduler._remove_active_jobs()  # noqa: SLF001
 
-        # Should remove three jobs
-        assert mock_scheduler.remove_job.call_count == 3
+        # Should remove four jobs
+        assert mock_scheduler.remove_job.call_count == 4
         mock_scheduler.remove_job.assert_any_call('heartbeat_logger')
         mock_scheduler.remove_job.assert_any_call('daily_summary_checker')
+        mock_scheduler.remove_job.assert_any_call('daily_summary_scheduler')
         mock_scheduler.remove_job.assert_any_call('job_worker_poller')
         assert scheduler._jobs_added is False  # noqa: SLF001
 
@@ -858,10 +859,10 @@ def test_distributed_scheduler_job_worker_disabled() -> None:
         with patch.object(scheduler.lock, 'acquire', mock_acquire):
             scheduler.start()
 
-        # Should only add 4 jobs (not including job worker poller)
+        # Should only add 5 jobs (not including job worker poller)
         assert (
-            mock_scheduler.add_job.call_count == 4
-        )  # lock_manager + heartbeat + daily_summary_checker + user_timezone_sync
+            mock_scheduler.add_job.call_count == 5
+        )  # lock_manager + heartbeat + daily_summary_checker + user_timezone_sync + daily_summary_scheduler
 
 
 def test_distributed_scheduler_remove_job_worker_poller() -> None:
@@ -877,5 +878,6 @@ def test_distributed_scheduler_remove_job_worker_poller() -> None:
         # Call the method
         scheduler._remove_active_jobs()  # noqa: SLF001
 
-        # Should attempt to remove job_worker_poller along with other jobs
+        # Should attempt to remove daily_summary_scheduler and job_worker_poller along with other jobs
+        mock_scheduler.remove_job.assert_any_call('daily_summary_scheduler')
         mock_scheduler.remove_job.assert_any_call('job_worker_poller')

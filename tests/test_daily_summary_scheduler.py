@@ -203,3 +203,41 @@ def test_schedule_daily_summaries_deduplication_prevents_duplicate(
     assert {'user_id': 'user1'} in job_payloads
     assert {'user_id': 'user2'} not in job_payloads
     assert {'user_id': 'user3'} in job_payloads
+
+
+def test_scheduler_registers_daily_summary_job() -> None:
+    """Test that the scheduler registers the daily summary scheduling job."""
+    from unittest.mock import MagicMock, patch
+
+    with patch('companion_memory.scheduler.BackgroundScheduler') as mock_scheduler_class:
+        mock_scheduler = MagicMock()
+        mock_scheduler_class.return_value = mock_scheduler
+
+        # Mock the scheduler lock acquisition
+        with patch('companion_memory.scheduler.SchedulerLock') as mock_lock_class:
+            mock_lock = MagicMock()
+            mock_lock.acquire.return_value = True
+            mock_lock.lock_acquired = True
+            mock_lock_class.return_value = mock_lock
+
+            from companion_memory.scheduler import DistributedScheduler
+
+            scheduler = DistributedScheduler()
+            scheduler.start()
+
+            # Check that the scheduler added the daily summary scheduling job
+            # It should be one of the calls to add_job
+            job_calls = mock_scheduler.add_job.call_args_list
+
+            # Look for a call that includes schedule_daily_summaries function
+            daily_summary_job_found = False
+            for call in job_calls:
+                args, kwargs = call
+                if len(args) > 0 and hasattr(args[0], '__name__') and 'schedule_daily_summaries' in args[0].__name__:
+                    daily_summary_job_found = True
+                    # Check it has the right cron schedule (daily at midnight UTC)
+                    assert 'cron' in args or kwargs.get('trigger') == 'cron'
+                    assert kwargs.get('hour') == 0 or (len(args) > 2 and 'hour' in str(args[2]))
+                    break
+
+            assert daily_summary_job_found, 'Daily summary scheduling job not found in scheduler jobs'

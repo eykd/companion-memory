@@ -254,6 +254,11 @@ class DistributedScheduler:
         # Schedule user time zone sync every 6 hours
         self.scheduler.add_job(sync_user_timezone, 'interval', hours=6, id='user_timezone_sync', max_instances=1)
 
+        # Schedule daily summary scheduling job (runs daily at midnight UTC)
+        self.scheduler.add_job(
+            self._schedule_daily_summaries, 'cron', hour=0, id='daily_summary_scheduler', max_instances=1
+        )
+
         # Schedule job worker polling if enabled
         if self._job_worker_enabled:
             self.scheduler.add_job(
@@ -279,6 +284,10 @@ class DistributedScheduler:
         # Remove daily summary checker
         with contextlib.suppress(Exception):
             self.scheduler.remove_job('daily_summary_checker')
+
+        # Remove daily summary scheduler
+        with contextlib.suppress(Exception):
+            self.scheduler.remove_job('daily_summary_scheduler')
 
         # Remove job worker poller
         with contextlib.suppress(Exception):
@@ -337,6 +346,36 @@ class DistributedScheduler:
 
         except Exception:
             logger.exception('Error in job worker polling')
+
+    def _schedule_daily_summaries(self) -> None:
+        """Schedule daily summary jobs for all configured users."""
+        # Double-check we still have the lock before processing
+        if not self.lock.lock_acquired:
+            return
+
+        try:
+            # Lazy import to avoid circular imports
+            from companion_memory.daily_summary_scheduler import schedule_daily_summaries
+            from companion_memory.deduplication import DeduplicationIndex
+            from companion_memory.job_table import JobTable
+            from companion_memory.user_settings import DynamoUserSettingsStore
+
+            # Set up dependencies
+            user_settings_store = DynamoUserSettingsStore()
+            job_table = JobTable()
+            deduplication_index = DeduplicationIndex()
+
+            # Schedule daily summaries
+            schedule_daily_summaries(
+                user_settings_store=user_settings_store,
+                job_table=job_table,
+                deduplication_index=deduplication_index,
+            )
+
+            logger.info('Scheduled daily summary jobs')
+
+        except Exception:
+            logger.exception('Error scheduling daily summaries')
 
     def configure_dependencies(self, log_store: LogStore, llm: LLMClient) -> None:
         """Configure log store and LLM dependencies for scheduler jobs.
