@@ -292,3 +292,68 @@ def test_daily_summary_handler_type_error() -> None:
 
     with pytest.raises(TypeError, match='Expected DailySummaryPayload'):
         handler.handle(wrong_payload)
+
+
+def test_end_to_end_daily_summary_workflow(
+    mock_user_settings_store: MagicMock, mock_job_table: MagicMock, mock_deduplication_index: MagicMock
+) -> None:
+    """Test the complete daily summary workflow from scheduling to execution."""
+    from datetime import UTC, datetime
+    from unittest.mock import patch
+
+    from companion_memory.daily_summary_scheduler import (
+        DailySummaryHandler,
+        schedule_daily_summaries,
+    )
+
+    # Mock timezone function and logging for handler test
+    with (
+        patch('companion_memory.summarizer._get_user_timezone') as mock_get_tz,
+        patch('logging.getLogger') as mock_get_logger,
+        patch.dict('os.environ', {'DAILY_SUMMARY_USERS': 'user1,user2'}),
+    ):
+        from zoneinfo import ZoneInfo
+
+        mock_get_tz.return_value = ZoneInfo('America/New_York')
+        mock_logger = MagicMock()
+        mock_get_logger.return_value = mock_logger
+
+        # Step 1: Schedule daily summaries (this would run at midnight UTC)
+        now_utc = datetime(2025, 1, 15, 0, 0, tzinfo=UTC)  # Midnight UTC
+        schedule_daily_summaries(
+            user_settings_store=mock_user_settings_store,
+            job_table=mock_job_table,
+            deduplication_index=mock_deduplication_index,
+            now_utc=now_utc,
+        )
+
+        # Verify jobs were scheduled
+        assert mock_job_table.put_job.call_count == 2  # Two users
+        scheduled_jobs = [call[0][0] for call in mock_job_table.put_job.call_args_list]
+
+        # Check job types and payloads
+        for job in scheduled_jobs:
+            assert job.job_type == 'daily_summary'
+            assert job.payload['user_id'] in ['user1', 'user2']
+            assert job.status == 'pending'
+
+        # Step 2: Process one of the jobs (this would happen when job worker runs)
+        test_job = scheduled_jobs[0]  # Take the first job
+        handler = DailySummaryHandler()
+
+        # Create payload from job
+        from companion_memory.daily_summary_scheduler import DailySummaryPayload
+
+        payload = DailySummaryPayload(**test_job.payload)
+
+        # Execute the handler
+        handler.handle(payload)
+
+        # Verify the handler executed properly
+        mock_get_tz.assert_called_with(payload.user_id)
+        mock_logger.info.assert_called_once()
+
+        # Check that logging happened with correct message
+        log_call_args = mock_logger.info.call_args[0]
+        assert log_call_args[0] == 'Would send daily summary to user %s for %s'
+        assert log_call_args[1] == payload.user_id
