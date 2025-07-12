@@ -12,11 +12,11 @@ def mock_user_settings_store() -> MagicMock:
     """Mock UserSettingsStore with known timezones."""
     store = MagicMock()
     # Configure store to return specific timezones for test users
-    store.get_user_timezone.side_effect = lambda user_id: {
-        'user1': ZoneInfo('America/New_York'),  # EST/EDT
-        'user2': ZoneInfo('Europe/London'),  # GMT/BST
-        'user3': ZoneInfo('Asia/Tokyo'),  # JST
-    }.get(user_id, ZoneInfo('UTC'))  # Default to UTC for unknown users
+    store.get_user_settings.side_effect = lambda user_id: {
+        'user1': {'timezone': 'America/New_York'},  # EST/EDT
+        'user2': {'timezone': 'Europe/London'},  # GMT/BST
+        'user3': {'timezone': 'Asia/Tokyo'},  # JST
+    }.get(user_id, {})  # Default to empty dict for unknown users
     return store
 
 
@@ -41,9 +41,9 @@ def test_fixtures_are_properly_configured(
 ) -> None:
     """Test that our fixtures are properly configured."""
     # Test user settings store
-    assert mock_user_settings_store.get_user_timezone('user1') == ZoneInfo('America/New_York')
-    assert mock_user_settings_store.get_user_timezone('user2') == ZoneInfo('Europe/London')
-    assert mock_user_settings_store.get_user_timezone('unknown') == ZoneInfo('UTC')
+    assert mock_user_settings_store.get_user_settings('user1') == {'timezone': 'America/New_York'}
+    assert mock_user_settings_store.get_user_settings('user2') == {'timezone': 'Europe/London'}
+    assert mock_user_settings_store.get_user_settings('unknown') == {}
 
     # Test job table
     mock_job_table.put_job('test')
@@ -130,3 +130,76 @@ def test_make_daily_summary_job_id_timezone_crossing() -> None:
     # Should use the local date (2025-01-15) not the UTC date (2025-01-14)
     expected = 'daily_summary#U67890#2025-01-15'
     assert result == expected
+
+
+def test_schedule_daily_summaries(
+    mock_user_settings_store: MagicMock, mock_job_table: MagicMock, mock_deduplication_index: MagicMock
+) -> None:
+    """Test integration of schedule_daily_summaries function."""
+    from unittest.mock import patch
+
+    from companion_memory.daily_summary_scheduler import schedule_daily_summaries
+
+    # Mock environment variable with test users
+    with patch.dict('os.environ', {'DAILY_SUMMARY_USERS': 'user1,user2,user3'}):
+        # Mock a specific "now" time for consistent testing
+        now_utc = datetime(2025, 1, 15, 0, 0, tzinfo=UTC)  # 00:00 UTC
+
+        schedule_daily_summaries(
+            user_settings_store=mock_user_settings_store,
+            job_table=mock_job_table,
+            deduplication_index=mock_deduplication_index,
+            now_utc=now_utc,
+        )
+
+    # Verify that user settings were fetched for each user
+    mock_user_settings_store.get_user_settings.assert_any_call('user1')
+    mock_user_settings_store.get_user_settings.assert_any_call('user2')
+    mock_user_settings_store.get_user_settings.assert_any_call('user3')
+    assert mock_user_settings_store.get_user_settings.call_count == 3
+
+    # Verify deduplication was attempted for each user
+    assert mock_deduplication_index.try_reserve.call_count == 3
+
+    # Verify jobs were created for each user (since try_reserve returns True)
+    assert mock_job_table.put_job.call_count == 3
+
+    # Check that the job payloads are correct
+    job_calls = mock_job_table.put_job.call_args_list
+    job_payloads = [call[0][0].payload for call in job_calls]
+
+    assert {'user_id': 'user1'} in job_payloads
+    assert {'user_id': 'user2'} in job_payloads
+    assert {'user_id': 'user3'} in job_payloads
+
+
+def test_schedule_daily_summaries_deduplication_prevents_duplicate(
+    mock_user_settings_store: MagicMock, mock_job_table: MagicMock, mock_deduplication_index: MagicMock
+) -> None:
+    """Test that deduplication prevents duplicate job scheduling."""
+    from unittest.mock import patch
+
+    from companion_memory.daily_summary_scheduler import schedule_daily_summaries
+
+    # Configure deduplication to fail for second user (job already exists)
+    mock_deduplication_index.try_reserve.side_effect = [True, False, True]  # user1: yes, user2: no, user3: yes
+
+    with patch.dict('os.environ', {'DAILY_SUMMARY_USERS': 'user1,user2,user3'}):
+        now_utc = datetime(2025, 1, 15, 0, 0, tzinfo=UTC)
+
+        schedule_daily_summaries(
+            user_settings_store=mock_user_settings_store,
+            job_table=mock_job_table,
+            deduplication_index=mock_deduplication_index,
+            now_utc=now_utc,
+        )
+
+    # Should only create 2 jobs (user1 and user3), skipping user2
+    assert mock_job_table.put_job.call_count == 2
+
+    job_calls = mock_job_table.put_job.call_args_list
+    job_payloads = [call[0][0].payload for call in job_calls]
+
+    assert {'user_id': 'user1'} in job_payloads
+    assert {'user_id': 'user2'} not in job_payloads
+    assert {'user_id': 'user3'} in job_payloads
