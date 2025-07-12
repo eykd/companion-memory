@@ -815,3 +815,69 @@ def test_distributed_scheduler_remove_job_worker_poller() -> None:
         # Should attempt to remove daily_summary_scheduler and job_worker_poller along with other jobs
         mock_scheduler.remove_job.assert_any_call('daily_summary_scheduler')
         mock_scheduler.remove_job.assert_any_call('job_worker_poller')
+
+
+def test_distributed_scheduler_schedule_daily_summaries_without_lock() -> None:
+    """Test _schedule_daily_summaries when lock is not held."""
+    with patch('boto3.resource'):
+        scheduler = DistributedScheduler('TestTable')
+        scheduler.lock.lock_acquired = False
+
+        # Call the method - should return early
+        scheduler._schedule_daily_summaries()  # noqa: SLF001
+
+        # Should not try to import or create any dependencies
+
+
+def test_distributed_scheduler_schedule_daily_summaries_success() -> None:
+    """Test _schedule_daily_summaries successful execution."""
+    with (
+        patch('boto3.resource'),
+        patch('companion_memory.scheduler.logger') as mock_logger,
+        patch('companion_memory.user_settings.DynamoUserSettingsStore') as mock_settings_store_class,
+        patch('companion_memory.job_table.JobTable') as mock_job_table_class,
+        patch('companion_memory.deduplication.DeduplicationIndex') as mock_dedup_class,
+        patch('companion_memory.daily_summary_scheduler.schedule_daily_summaries') as mock_schedule_fn,
+    ):
+        # Set up mocks
+        mock_settings_store = MagicMock()
+        mock_job_table = MagicMock()
+        mock_dedup_index = MagicMock()
+
+        mock_settings_store_class.return_value = mock_settings_store
+        mock_job_table_class.return_value = mock_job_table
+        mock_dedup_class.return_value = mock_dedup_index
+
+        scheduler = DistributedScheduler('TestTable')
+        scheduler.lock.lock_acquired = True
+
+        # Call the method
+        scheduler._schedule_daily_summaries()  # noqa: SLF001
+
+        # Should call the schedule function with correct dependencies
+        mock_schedule_fn.assert_called_once_with(
+            user_settings_store=mock_settings_store,
+            job_table=mock_job_table,
+            deduplication_index=mock_dedup_index,
+        )
+
+        # Should log success
+        mock_logger.info.assert_called_once_with('Scheduled daily summary jobs')
+
+
+def test_distributed_scheduler_schedule_daily_summaries_exception() -> None:
+    """Test _schedule_daily_summaries when an exception occurs."""
+    with (
+        patch('boto3.resource'),
+        patch('companion_memory.scheduler.logger') as mock_logger,
+    ):
+        scheduler = DistributedScheduler('TestTable')
+        scheduler.lock.lock_acquired = True
+
+        # Mock DynamoUserSettingsStore to raise an exception
+        with patch('companion_memory.user_settings.DynamoUserSettingsStore', side_effect=Exception('Import error')):
+            # Call the method - should not raise exception
+            scheduler._schedule_daily_summaries()  # noqa: SLF001
+
+            # Should log the exception
+            mock_logger.exception.assert_called_once_with('Error scheduling daily summaries')

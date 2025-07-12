@@ -359,6 +359,167 @@ def test_end_to_end_daily_summary_workflow(
         assert log_call_args[1] == payload.user_id
 
 
+def test_schedule_daily_summaries_uses_current_time_when_now_utc_is_none(
+    mock_user_settings_store: MagicMock, mock_job_table: MagicMock, mock_deduplication_index: MagicMock
+) -> None:
+    """Test that schedule_daily_summaries uses current time when now_utc is None."""
+    from unittest.mock import patch
+
+    from companion_memory.daily_summary_scheduler import schedule_daily_summaries
+
+    with patch.dict('os.environ', {'DAILY_SUMMARY_USERS': 'user1'}):
+        # Just verify it doesn't crash when now_utc is None
+        # This will exercise the datetime.now(UTC) path
+        schedule_daily_summaries(
+            user_settings_store=mock_user_settings_store,
+            job_table=mock_job_table,
+            deduplication_index=mock_deduplication_index,
+            now_utc=None,  # This should trigger the datetime.now(UTC) call
+        )
+
+        # Should have called the store methods
+        mock_user_settings_store.get_user_settings.assert_called_once_with('user1')
+        mock_deduplication_index.try_reserve.assert_called_once()
+        mock_job_table.put_job.assert_called_once()
+
+
+def test_schedule_daily_summaries_returns_early_when_no_users_configured(
+    mock_user_settings_store: MagicMock, mock_job_table: MagicMock, mock_deduplication_index: MagicMock
+) -> None:
+    """Test that schedule_daily_summaries returns early when DAILY_SUMMARY_USERS is empty."""
+    from unittest.mock import patch
+
+    from companion_memory.daily_summary_scheduler import schedule_daily_summaries
+
+    # Test with empty environment variable
+    with patch.dict('os.environ', {'DAILY_SUMMARY_USERS': ''}):
+        schedule_daily_summaries(
+            user_settings_store=mock_user_settings_store,
+            job_table=mock_job_table,
+            deduplication_index=mock_deduplication_index,
+            now_utc=datetime(2025, 1, 15, 0, 0, tzinfo=UTC),
+        )
+
+        # Should not call any store methods
+        mock_user_settings_store.get_user_settings.assert_not_called()
+        mock_deduplication_index.try_reserve.assert_not_called()
+        mock_job_table.put_job.assert_not_called()
+
+    # Test with missing environment variable
+    with patch.dict('os.environ', {}, clear=True):
+        schedule_daily_summaries(
+            user_settings_store=mock_user_settings_store,
+            job_table=mock_job_table,
+            deduplication_index=mock_deduplication_index,
+            now_utc=datetime(2025, 1, 15, 0, 0, tzinfo=UTC),
+        )
+
+        # Should not call any store methods
+        mock_user_settings_store.get_user_settings.assert_not_called()
+        mock_deduplication_index.try_reserve.assert_not_called()
+        mock_job_table.put_job.assert_not_called()
+
+
+def test_schedule_daily_summaries_handles_invalid_timezone(
+    mock_user_settings_store: MagicMock, mock_job_table: MagicMock, mock_deduplication_index: MagicMock
+) -> None:
+    """Test that schedule_daily_summaries handles invalid timezone gracefully."""
+    from unittest.mock import patch
+    from zoneinfo import ZoneInfo
+
+    from companion_memory.daily_summary_scheduler import schedule_daily_summaries
+
+    # Configure store to return invalid timezone that will raise ZoneInfo exception
+    mock_user_settings_store.get_user_settings.return_value = {'timezone': 'Not/A/Real/Timezone'}
+
+    with (
+        patch.dict('os.environ', {'DAILY_SUMMARY_USERS': 'user1'}),
+        patch('companion_memory.daily_summary_scheduler.ZoneInfo') as mock_zoneinfo,
+    ):
+        # Mock ZoneInfo to raise exception for invalid timezone but work for UTC
+        def zoneinfo_side_effect(tz_name: str) -> ZoneInfo:
+            if tz_name == 'Not/A/Real/Timezone':
+                raise ValueError('Invalid timezone')
+            return ZoneInfo(tz_name)
+
+        mock_zoneinfo.side_effect = zoneinfo_side_effect
+
+        schedule_daily_summaries(
+            user_settings_store=mock_user_settings_store,
+            job_table=mock_job_table,
+            deduplication_index=mock_deduplication_index,
+            now_utc=datetime(2025, 1, 15, 0, 0, tzinfo=UTC),
+        )
+
+        # Should still process the job but with UTC timezone as fallback
+        mock_deduplication_index.try_reserve.assert_called_once()
+        mock_job_table.put_job.assert_called_once()
+
+        # Check that the job was created (with UTC as fallback timezone)
+        job_call = mock_job_table.put_job.call_args[0][0]
+        assert job_call.payload == {'user_id': 'user1'}
+
+
+def test_schedule_daily_summaries_handles_missing_timezone(
+    mock_user_settings_store: MagicMock, mock_job_table: MagicMock, mock_deduplication_index: MagicMock
+) -> None:
+    """Test that schedule_daily_summaries handles missing timezone gracefully."""
+    from unittest.mock import patch
+
+    from companion_memory.daily_summary_scheduler import schedule_daily_summaries
+
+    # Configure store to return settings without timezone
+    mock_user_settings_store.get_user_settings.return_value = {}
+
+    with patch.dict('os.environ', {'DAILY_SUMMARY_USERS': 'user1'}):
+        schedule_daily_summaries(
+            user_settings_store=mock_user_settings_store,
+            job_table=mock_job_table,
+            deduplication_index=mock_deduplication_index,
+            now_utc=datetime(2025, 1, 15, 0, 0, tzinfo=UTC),
+        )
+
+        # Should still process the job but with UTC timezone as fallback
+        mock_deduplication_index.try_reserve.assert_called_once()
+        mock_job_table.put_job.assert_called_once()
+
+        # Check that the job was created (with UTC as fallback timezone)
+        job_call = mock_job_table.put_job.call_args[0][0]
+        assert job_call.payload == {'user_id': 'user1'}
+
+
+def test_daily_summary_handler_payload_model() -> None:
+    """Test that DailySummaryHandler.payload_model returns correct type."""
+    from companion_memory.daily_summary_scheduler import DailySummaryHandler, DailySummaryPayload
+
+    result = DailySummaryHandler.payload_model()
+    assert result is DailySummaryPayload
+
+
+def test_daily_summary_handler_exception_handling() -> None:
+    """Test that DailySummaryHandler handles exceptions gracefully."""
+    from unittest.mock import patch
+
+    from companion_memory.daily_summary_scheduler import DailySummaryHandler, DailySummaryPayload
+
+    # Mock the _get_user_timezone function to raise an exception
+    with (
+        patch('companion_memory.summarizer._get_user_timezone', side_effect=Exception('Test error')),
+        patch('logging.getLogger') as mock_get_logger,
+    ):
+        mock_logger = MagicMock()
+        mock_get_logger.return_value = mock_logger
+
+        handler = DailySummaryHandler()
+        payload = DailySummaryPayload(user_id='user123')
+
+        # Should not raise exception
+        handler.handle(payload)
+
+        # Should log the exception
+        mock_logger.exception.assert_called_once_with('Error processing daily summary for user %s', 'user123')
+
+
 def test_legacy_daily_summary_checker_is_disabled() -> None:
     """Test that the legacy daily summary checker is disabled."""
     from unittest.mock import patch
