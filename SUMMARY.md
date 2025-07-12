@@ -2,7 +2,7 @@
 
 ## Overview
 
-Companion Memory is a work activity tracking and summarization system that integrates with Slack to capture user logs and generate AI-powered summaries. The system follows hexagonal architecture principles and uses DynamoDB for storage with distributed scheduling for background jobs.
+Companion Memory is a work activity tracking and summarization system that integrates with Slack to capture user logs and generate AI-powered summaries. The system features both time-based scheduling and event-driven job processing, follows hexagonal architecture principles, and uses DynamoDB for storage with distributed coordination for background jobs.
 
 ## Architecture
 
@@ -18,6 +18,7 @@ The system uses **hexagonal architecture** to separate business logic from exter
 - **Single Table Design**: DynamoDB uses a single table with composite keys (`PK`, `SK`) for all data
 - **Distributed Scheduling**: Uses DynamoDB locks for coordinating background jobs across workers
 - **Protocol-Based Dependency Injection**: Interfaces defined as Python Protocols for clean separation
+- **Event-Driven Job Processing**: Asynchronous job queue with retries, deduplication, and distributed locking
 - **Test-First Development**: Comprehensive test coverage with TDD practices
 
 ## Project Structure
@@ -36,7 +37,13 @@ src/companion_memory/
 ├── scheduler.py        # Distributed background job scheduling
 ├── summarizer.py       # AI-powered log summarization
 ├── llm_client.py       # LLM service integration
-└── slack_auth.py       # Slack webhook signature validation
+├── slack_auth.py       # Slack webhook signature validation
+├── job_models.py       # Job queue data models
+├── job_table.py        # DynamoDB job storage operations
+├── job_dispatcher.py   # Type-safe job routing and validation
+├── job_worker.py       # Job processing and execution
+├── deduplication.py    # Job deduplication logic
+└── retry_policy.py     # Exponential backoff and retry handling
 
 tests/
 ├── test_*.py           # Test modules mirroring source structure
@@ -48,10 +55,11 @@ tests/
 ### Application Layer
 
 #### `cli.py` - Command Line Interface
-- **Purpose**: Click-based CLI with commands for scheduler, web server, and Slack testing
+- **Purpose**: Click-based CLI with commands for scheduler, web server, job worker, and Slack testing
 - **Commands**:
   - `comem scheduler` - Run background scheduler
   - `comem web` - Run Flask development server
+  - `comem job-worker` - Run standalone job worker
   - `comem slack-test` - Test Slack connectivity
 - **Entry Point**: `comem` command via pyproject.toml
 
@@ -60,6 +68,7 @@ tests/
 - **Key Functions**:
   - `run_scheduler()` - Start background scheduler
   - `run_web_server()` - Start Flask development server
+  - `run_job_worker()` - Start standalone job worker with polling loop
   - `test_slack_connection()` - Validate Slack API integration
 
 #### `app.py` - Flask Web Application
@@ -110,6 +119,50 @@ tests/
 - **Default Model**: Claude 3.5 Haiku (`anthropic/claude-3-haiku-20240307`)
 - **Error Handling**: Custom exceptions for configuration and generation errors
 
+### Job Queue System
+
+#### `job_models.py` - Job Data Models
+- **Core Model**: `ScheduledJob` - Pydantic model for job queue entries
+- **Attributes**: job_id, job_type, payload, scheduled_for, status, attempts, locking fields
+- **Helpers**: `make_job_sk()`, `parse_job_sk()` - DynamoDB sort key utilities
+- **Status Enum**: JobStatus (pending, in_progress, completed, failed, dead_letter)
+
+#### `job_table.py` - Job Storage Operations
+- **Class**: `JobTable` - DynamoDB operations for scheduled jobs
+- **Methods**:
+  - `put_job()` - Store new jobs with conditional writes
+  - `get_due_jobs()` - Query jobs ready for processing
+  - `update_job_status()` - Atomic status updates with locking
+- **Design**: Uses single table with `PK: job`, `SK: scheduled#<timestamp>`
+
+#### `job_dispatcher.py` - Type-Safe Job Routing
+- **Protocol**: `BaseJobHandler` - Interface for job handlers
+- **Class**: `JobDispatcher` - Routes jobs to registered handlers
+- **Features**: Pydantic payload validation, type-safe handler registration
+- **Registration**: `@register_handler` decorator for handler classes
+
+#### `job_worker.py` - Job Processing Engine
+- **Class**: `JobWorker` - Main job processing orchestrator
+- **Methods**:
+  - `poll_and_process_jobs()` - Main polling loop
+  - `register_handler()` - Add job type handlers
+  - `_claim_and_run()` - Atomic job claiming and execution
+- **Features**: Distributed locking, error handling, Sentry integration
+
+#### `deduplication.py` - Job Deduplication
+- **Class**: `JobDeduplicationIndex` - Prevents duplicate job scheduling
+- **Method**: `try_reserve()` - Atomic reservation with logical job IDs
+- **Design**: Uses conditional writes with `PK: dedup#<logical_id>#<date>`
+- **Purpose**: Ensures exactly-once job scheduling for identical requests
+
+#### `retry_policy.py` - Failure Handling
+- **Class**: `RetryPolicy` - Configurable retry and backoff logic
+- **Methods**:
+  - `calculate_delay()` - Exponential backoff calculation
+  - `should_retry()` - Determines if job should be retried
+  - `is_dead_letter()` - Identifies jobs exceeding max attempts
+- **Features**: Configurable base delay, max attempts, dead letter handling
+
 ### Infrastructure
 
 #### `scheduler.py` - Distributed Scheduling
@@ -121,7 +174,8 @@ tests/
   - Heartbeat logging (60 seconds)
   - Daily summary checking (hourly)
   - User timezone sync (6 hours)
-- **Features**: Lock acquisition/refresh, worker coordination, automatic failover
+  - Job worker polling (30 seconds) - Integrated event-based job processing
+- **Features**: Lock acquisition/refresh, worker coordination, automatic failover, unified job processing
 
 #### `user_sync.py` - Slack Profile Synchronization
 - **Functions**:
@@ -162,6 +216,16 @@ The system uses a single DynamoDB table (`CompanionMemory`) with the following p
 - **PK**: `system#scheduler`
 - **SK**: `lock#main`
 - **Attributes**: `process_id`, `timestamp`, `ttl`, `instance_info`
+
+#### Scheduled Jobs
+- **PK**: `job`
+- **SK**: `scheduled#<ISO_TIMESTAMP>`
+- **Attributes**: `job_id`, `job_type`, `payload`, `status`, `attempts`, `locked_by`, `lock_expires_at`
+
+#### Job Deduplication Index
+- **PK**: `dedup#<LOGICAL_ID>#<DATE>`
+- **SK**: `index`
+- **Attributes**: `job_pk`, `job_sk`, `reserved_at`
 
 ### Environment Variables
 
@@ -236,6 +300,7 @@ The system uses a single DynamoDB table (`CompanionMemory`) with the following p
 - **Monitoring**: Sentry for error tracking
 - **Logging**: Structured logging to stdout
 - **Scheduling**: Distributed coordination across workers
+- **Job Processing**: Unified time-based and event-driven job execution
 
 ### Infrastructure Requirements
 - **AWS**: DynamoDB table with appropriate IAM permissions
@@ -243,4 +308,4 @@ The system uses a single DynamoDB table (`CompanionMemory`) with the following p
 - **LLM**: Anthropic API access or compatible service
 - **Runtime**: Python 3.13+ with uv package manager
 
-This architecture provides a robust, scalable system for work activity tracking with clean separation of concerns, comprehensive testing, and production-ready deployment capabilities.
+This architecture provides a robust, scalable system for work activity tracking with clean separation of concerns, unified job processing (both time-based and event-driven), comprehensive testing, and production-ready deployment capabilities. The system supports both immediate webhook responses and asynchronous background processing with automatic retries and failure handling.
