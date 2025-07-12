@@ -25,25 +25,26 @@ The system uses **hexagonal architecture** to separate business logic from exter
 
 ```
 src/companion_memory/
-├── __init__.py          # Package entry point
-├── cli.py              # Click-based CLI interface
-├── commands.py         # CLI command implementations
-├── app.py              # Flask web application
-├── wsgi.py             # WSGI entry point for production
-├── exceptions.py       # Custom exception hierarchy
-├── storage.py          # Log storage interfaces and implementations
-├── user_settings.py    # User settings storage
-├── user_sync.py        # User profile synchronization from Slack
-├── scheduler.py        # Distributed background job scheduling
-├── summarizer.py       # AI-powered log summarization
-├── llm_client.py       # LLM service integration
-├── slack_auth.py       # Slack webhook signature validation
-├── job_models.py       # Job queue data models
-├── job_table.py        # DynamoDB job storage operations
-├── job_dispatcher.py   # Type-safe job routing and validation
-├── job_worker.py       # Job processing and execution
-├── deduplication.py    # Job deduplication logic
-└── retry_policy.py     # Exponential backoff and retry handling
+├── __init__.py                  # Package entry point
+├── cli.py                      # Click-based CLI interface
+├── commands.py                 # CLI command implementations
+├── app.py                      # Flask web application
+├── wsgi.py                     # WSGI entry point for production
+├── exceptions.py               # Custom exception hierarchy
+├── storage.py                  # Log storage interfaces and implementations
+├── user_settings.py            # User settings storage
+├── user_sync.py                # User profile synchronization from Slack
+├── scheduler.py                # Distributed background job scheduling
+├── summarizer.py               # AI-powered log summarization
+├── llm_client.py               # LLM service integration
+├── slack_auth.py               # Slack webhook signature validation
+├── job_models.py               # Job queue data models
+├── job_table.py                # DynamoDB job storage operations
+├── job_dispatcher.py           # Type-safe job routing and validation
+├── job_worker.py               # Job processing and execution
+├── deduplication.py            # Job deduplication logic
+├── retry_policy.py             # Exponential backoff and retry handling
+└── daily_summary_scheduler.py  # Event-driven daily summary scheduling
 
 tests/
 ├── test_*.py           # Test modules mirroring source structure
@@ -111,7 +112,7 @@ tests/
   - `summarize_yesterday()` - Previous day summary in user timezone
   - `summarize_today()` - Current day summary in user timezone
 - **Features**: Timezone-aware date calculations, formatted prompts, automatic user sync
-- **Scheduled Jobs**: `check_and_send_daily_summaries()` - Sends 7am summaries based on user timezones
+- **Legacy**: `check_and_send_daily_summaries()` - Replaced by event-driven job queue system
 
 #### `llm_client.py` - LLM Integration
 - **Implementation**: `LLMLClient` - Concrete LLM client using `llm` library
@@ -150,10 +151,20 @@ tests/
 - **Features**: Distributed locking, error handling, Sentry integration
 
 #### `deduplication.py` - Job Deduplication
-- **Class**: `JobDeduplicationIndex` - Prevents duplicate job scheduling
+- **Class**: `DeduplicationIndex` - Prevents duplicate job scheduling
 - **Method**: `try_reserve()` - Atomic reservation with logical job IDs
 - **Design**: Uses conditional writes with `PK: dedup#<logical_id>#<date>`
 - **Purpose**: Ensures exactly-once job scheduling for identical requests
+
+#### `daily_summary_scheduler.py` - Daily Summary Scheduling
+- **Purpose**: Event-driven daily summary job scheduling system
+- **Core Functions**:
+  - `schedule_daily_summaries()` - Main scheduling function (runs daily at midnight UTC)
+  - `get_next_7am_utc()` - Calculates next 7:00 AM in user's timezone
+  - `make_daily_summary_job_id()` - Generates logical job IDs for deduplication
+- **Handler**: `DailySummaryHandler` - Processes daily summary jobs
+- **Features**: Timezone-aware scheduling, job deduplication, automatic user settings integration
+- **Migration**: Replaced legacy polling-based daily summary system
 
 #### `retry_policy.py` - Failure Handling
 - **Class**: `RetryPolicy` - Configurable retry and backoff logic
