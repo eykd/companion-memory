@@ -1,5 +1,6 @@
 """Tests for daily summary scheduling functionality."""
 
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
 from zoneinfo import ZoneInfo
 
@@ -50,3 +51,48 @@ def test_fixtures_are_properly_configured(
 
     # Test deduplication index
     assert mock_deduplication_index.try_reserve('test') is True
+
+
+def test_get_next_7am_utc_same_day() -> None:
+    """Test computing next 7am when it's still early in the day."""
+    from companion_memory.daily_summary_scheduler import get_next_7am_utc
+
+    # 3:00 AM EST on 2025-01-15 should return 7:00 AM EST same day
+    now_utc = datetime(2025, 1, 15, 8, 0, tzinfo=UTC)  # 3:00 AM EST
+    user_tz = ZoneInfo('America/New_York')
+
+    result = get_next_7am_utc(user_tz, now_utc)
+
+    # Should be 7:00 AM EST = 12:00 UTC
+    expected = datetime(2025, 1, 15, 12, 0, tzinfo=UTC)
+    assert result == expected
+
+
+def test_get_next_7am_utc_next_day() -> None:
+    """Test computing next 7am when it's past 7am today."""
+    from companion_memory.daily_summary_scheduler import get_next_7am_utc
+
+    # 10:00 AM EST on 2025-01-15 should return 7:00 AM EST next day
+    now_utc = datetime(2025, 1, 15, 15, 0, tzinfo=UTC)  # 10:00 AM EST
+    user_tz = ZoneInfo('America/New_York')
+
+    result = get_next_7am_utc(user_tz, now_utc)
+
+    # Should be 7:00 AM EST next day = 12:00 UTC next day
+    expected = datetime(2025, 1, 16, 12, 0, tzinfo=UTC)
+    assert result == expected
+
+
+def test_get_next_7am_utc_different_timezone() -> None:
+    """Test computing next 7am in different timezone."""
+    from companion_memory.daily_summary_scheduler import get_next_7am_utc
+
+    # 1:00 AM JST on 2025-01-15 should return 7:00 AM JST same day
+    now_utc = datetime(2025, 1, 14, 16, 0, tzinfo=UTC)  # 1:00 AM JST
+    user_tz = ZoneInfo('Asia/Tokyo')
+
+    result = get_next_7am_utc(user_tz, now_utc)
+
+    # Should be 7:00 AM JST = 22:00 UTC previous day
+    expected = datetime(2025, 1, 14, 22, 0, tzinfo=UTC)
+    assert result == expected
