@@ -357,3 +357,38 @@ def test_end_to_end_daily_summary_workflow(
         log_call_args = mock_logger.info.call_args[0]
         assert log_call_args[0] == 'Would send daily summary to user %s for %s'
         assert log_call_args[1] == payload.user_id
+
+
+def test_legacy_daily_summary_checker_is_disabled() -> None:
+    """Test that the legacy daily summary checker is disabled."""
+    from unittest.mock import patch
+
+    # Verify that the scheduler does not register the old daily_summary_checker job
+    with patch('companion_memory.scheduler.BackgroundScheduler') as mock_scheduler_class:
+        mock_scheduler = MagicMock()
+        mock_scheduler_class.return_value = mock_scheduler
+
+        # Mock the scheduler lock acquisition
+        with patch('companion_memory.scheduler.SchedulerLock') as mock_lock_class:
+            mock_lock = MagicMock()
+            mock_lock.acquire.return_value = True
+            mock_lock.lock_acquired = True
+            mock_lock_class.return_value = mock_lock
+
+            from companion_memory.scheduler import DistributedScheduler
+
+            scheduler = DistributedScheduler()
+            scheduler.start()
+
+            # Check that no daily_summary_checker job is registered
+            job_calls = mock_scheduler.add_job.call_args_list
+
+            daily_summary_checker_found = False
+            for call in job_calls:
+                _args, kwargs = call
+                job_id = kwargs.get('id', '')
+                if job_id == 'daily_summary_checker':
+                    daily_summary_checker_found = True
+                    break
+
+            assert not daily_summary_checker_found, 'Legacy daily_summary_checker job should not be registered'

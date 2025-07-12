@@ -246,11 +246,6 @@ class DistributedScheduler:
         # Schedule heartbeat logger
         self.scheduler.add_job(self._heartbeat_logger, 'interval', seconds=60, id='heartbeat_logger', max_instances=1)
 
-        # Schedule daily summary checker (runs hourly to check for 7am in user timezones)
-        self.scheduler.add_job(
-            self._check_daily_summaries, 'interval', hours=1, id='daily_summary_checker', max_instances=1
-        )
-
         # Schedule user time zone sync every 6 hours
         self.scheduler.add_job(sync_user_timezone, 'interval', hours=6, id='user_timezone_sync', max_instances=1)
 
@@ -281,10 +276,6 @@ class DistributedScheduler:
         with contextlib.suppress(Exception):
             self.scheduler.remove_job('heartbeat_logger')
 
-        # Remove daily summary checker
-        with contextlib.suppress(Exception):
-            self.scheduler.remove_job('daily_summary_checker')
-
         # Remove daily summary scheduler
         with contextlib.suppress(Exception):
             self.scheduler.remove_job('daily_summary_scheduler')
@@ -301,23 +292,6 @@ class DistributedScheduler:
         # Double-check we still have the lock before logging
         if self.lock.lock_acquired:
             logger.info('Scheduler heartbeat - process %s active', self.lock.process_id)
-
-    def _check_daily_summaries(self) -> None:
-        """Check and send daily summaries if it's 7am in any user's timezone."""
-        # Double-check we still have the lock before processing
-        if not self.lock.lock_acquired:
-            return
-
-        if self._log_store is None or self._llm is None:
-            logger.warning('Daily summaries not configured - missing log_store or llm')
-            return
-
-        try:
-            from companion_memory.summarizer import check_and_send_daily_summaries
-
-            check_and_send_daily_summaries(self._log_store, self._llm)
-        except Exception:
-            logger.exception('Error checking daily summaries')
 
     def _poll_and_process_jobs(self) -> None:
         """Poll and process scheduled jobs from the job queue."""

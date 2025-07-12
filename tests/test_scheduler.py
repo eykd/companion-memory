@@ -340,8 +340,8 @@ def test_distributed_scheduler_start_success() -> None:
         assert scheduler.started is True
         mock_scheduler.start.assert_called_once()
         assert (
-            mock_scheduler.add_job.call_count == 6
-        )  # lock_manager + heartbeat + daily_summary_checker + user_timezone_sync + daily_summary_scheduler + job_worker_poller
+            mock_scheduler.add_job.call_count == 5
+        )  # lock_manager + heartbeat + user_timezone_sync + daily_summary_scheduler + job_worker_poller
         mock_acquire.assert_called_once()
 
 
@@ -543,10 +543,9 @@ def test_distributed_scheduler_remove_active_jobs() -> None:
         # Call the method
         scheduler._remove_active_jobs()  # noqa: SLF001
 
-        # Should remove four jobs
-        assert mock_scheduler.remove_job.call_count == 4
+        # Should remove three jobs
+        assert mock_scheduler.remove_job.call_count == 3
         mock_scheduler.remove_job.assert_any_call('heartbeat_logger')
-        mock_scheduler.remove_job.assert_any_call('daily_summary_checker')
         mock_scheduler.remove_job.assert_any_call('daily_summary_scheduler')
         mock_scheduler.remove_job.assert_any_call('job_worker_poller')
         assert scheduler._jobs_added is False  # noqa: SLF001
@@ -581,71 +580,6 @@ def test_distributed_scheduler_configure_dependencies() -> None:
 
         assert scheduler._log_store is mock_log_store  # noqa: SLF001
         assert scheduler._llm is mock_llm  # noqa: SLF001
-
-
-def test_distributed_scheduler_check_daily_summaries_without_lock() -> None:
-    """Test _check_daily_summaries when lock is not held."""
-    with patch('boto3.resource'):
-        scheduler = DistributedScheduler('TestTable')
-        scheduler.lock.lock_acquired = False
-
-        # Call the method - should return early
-        scheduler._check_daily_summaries()  # noqa: SLF001
-
-        # No exception should be raised
-
-
-def test_distributed_scheduler_check_daily_summaries_without_dependencies() -> None:
-    """Test _check_daily_summaries when dependencies are not configured."""
-    with patch('boto3.resource'), patch('companion_memory.scheduler.logger') as mock_logger:
-        scheduler = DistributedScheduler('TestTable')
-        scheduler.lock.lock_acquired = True
-        scheduler._log_store = None  # noqa: SLF001
-        scheduler._llm = None  # noqa: SLF001
-
-        # Call the method - should log warning
-        scheduler._check_daily_summaries()  # noqa: SLF001
-
-        mock_logger.warning.assert_called_once_with('Daily summaries not configured - missing log_store or llm')
-
-
-def test_distributed_scheduler_check_daily_summaries_success() -> None:
-    """Test _check_daily_summaries with proper configuration."""
-    with (
-        patch('boto3.resource'),
-        patch('companion_memory.summarizer.check_and_send_daily_summaries') as mock_check_summaries,
-    ):
-        scheduler = DistributedScheduler('TestTable')
-        scheduler.lock.lock_acquired = True
-        mock_log_store = MagicMock()
-        mock_llm = MagicMock()
-        scheduler._log_store = mock_log_store  # noqa: SLF001
-        scheduler._llm = mock_llm  # noqa: SLF001
-
-        # Call the method
-        scheduler._check_daily_summaries()  # noqa: SLF001
-
-        mock_check_summaries.assert_called_once_with(mock_log_store, mock_llm)
-
-
-def test_distributed_scheduler_check_daily_summaries_exception() -> None:
-    """Test _check_daily_summaries when summary function raises exception."""
-    with (
-        patch('boto3.resource'),
-        patch('companion_memory.summarizer.check_and_send_daily_summaries', side_effect=Exception('Test error')),
-        patch('companion_memory.scheduler.logger') as mock_logger,
-    ):
-        scheduler = DistributedScheduler('TestTable')
-        scheduler.lock.lock_acquired = True
-        mock_log_store = MagicMock()
-        mock_llm = MagicMock()
-        scheduler._log_store = mock_log_store  # noqa: SLF001
-        scheduler._llm = mock_llm  # noqa: SLF001
-
-        # Call the method - should not raise exception
-        scheduler._check_daily_summaries()  # noqa: SLF001
-
-        mock_logger.exception.assert_called_once_with('Error checking daily summaries')
 
 
 def test_distributed_scheduler_shutdown_with_scheduler() -> None:
@@ -859,10 +793,10 @@ def test_distributed_scheduler_job_worker_disabled() -> None:
         with patch.object(scheduler.lock, 'acquire', mock_acquire):
             scheduler.start()
 
-        # Should only add 5 jobs (not including job worker poller)
+        # Should only add 4 jobs (not including job worker poller)
         assert (
-            mock_scheduler.add_job.call_count == 5
-        )  # lock_manager + heartbeat + daily_summary_checker + user_timezone_sync + daily_summary_scheduler
+            mock_scheduler.add_job.call_count == 4
+        )  # lock_manager + heartbeat + user_timezone_sync + daily_summary_scheduler
 
 
 def test_distributed_scheduler_remove_job_worker_poller() -> None:
