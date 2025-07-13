@@ -202,3 +202,55 @@ def test_dynamo_log_store_fetch_logs_with_mixed_timestamps() -> None:
         # Should only return the log after 9 AM
         assert len(logs) == 1
         assert logs[0]['text'] == 'Just right'
+
+
+def test_dynamo_log_store_fetch_logs_with_missing_timestamp() -> None:
+    """Test that DynamoLogStore.fetch_logs() handles records missing timestamp field."""
+    from datetime import UTC, datetime
+
+    # Mock boto3 client
+    mock_dynamodb = MagicMock()
+    mock_table = mock_dynamodb.Table.return_value
+
+    # Mock response with some records missing timestamp field
+    mock_response = {
+        'Items': [
+            {
+                'pk': 'user#U123456789',
+                'sk': 'log#2024-01-15T10:00:00+00:00',
+                'user_id': 'U123456789',
+                'timestamp': '2024-01-15T10:00:00+00:00',
+                'text': 'Valid record',
+                'log_id': 'test-log-1',
+            },
+            {
+                'pk': 'user#U123456789',
+                'sk': 'log#2024-01-15T11:00:00+00:00',
+                'user_id': 'U123456789',
+                # Missing timestamp field
+                'text': 'Corrupted record',
+                'log_id': 'test-log-2',
+            },
+            {
+                'pk': 'user#U123456789',
+                'sk': 'log#2024-01-15T12:00:00+00:00',
+                'user_id': 'U123456789',
+                'timestamp': '2024-01-15T12:00:00+00:00',
+                'text': 'Another valid record',
+                'log_id': 'test-log-3',
+            },
+        ]
+    }
+    mock_table.query.return_value = mock_response
+
+    with patch('companion_memory.storage.boto3.resource', return_value=mock_dynamodb):
+        store = DynamoLogStore()
+
+        # Test fetch_logs with missing timestamp field
+        since = datetime(2024, 1, 15, 9, 0, 0, tzinfo=UTC)
+        logs = store.fetch_logs('U123456789', since)
+
+        # Should only return records with valid timestamp fields
+        assert len(logs) == 2
+        assert logs[0]['text'] == 'Valid record'
+        assert logs[1]['text'] == 'Another valid record'

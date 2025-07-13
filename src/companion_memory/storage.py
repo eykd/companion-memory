@@ -198,6 +198,9 @@ class DynamoLogStore:
         # Filter items by timestamp (additional filtering beyond sort key)
         filtered_items = []
         for item in items:
+            # Skip items missing required timestamp field
+            if 'timestamp' not in item:
+                continue
             item_timestamp = datetime.fromisoformat(item['timestamp'].replace('Z', '+00:00'))  # noqa: FURB162
             # Ensure both timestamps are timezone-aware for comparison
             if item_timestamp.astimezone(UTC) >= since.astimezone(UTC):
