@@ -241,3 +241,79 @@ def test_schedule_work_sampling_jobs_utc_default_timezone(
         job = call[0][0]
         utc_time = job.scheduled_for.time()
         assert time(8, 0) <= utc_time <= time(17, 0)
+
+
+def test_schedule_work_sampling_jobs_default_now_utc() -> None:
+    """Test scheduling with default current time (now_utc=None)."""
+    from unittest.mock import MagicMock
+
+    mock_user_settings_store = MagicMock()
+    mock_job_table = MagicMock()
+    mock_deduplication_index = MagicMock()
+    mock_user_settings_store.get_all_users = MagicMock(return_value=[])
+
+    # Call without now_utc parameter
+    schedule_work_sampling_jobs(
+        user_settings_store=mock_user_settings_store,
+        job_table=mock_job_table,
+        deduplication_index=mock_deduplication_index,
+    )
+
+    # Should complete without error (no users to schedule)
+
+
+def test_schedule_work_sampling_jobs_default_dependencies() -> None:
+    """Test scheduling with default dependency instances."""
+    # This tests the lines where dependencies are created if None
+    schedule_work_sampling_jobs()
+
+    # Should complete without error (no users found in default implementation)
+
+
+def test_schedule_work_sampling_jobs_invalid_timezone() -> None:
+    """Test scheduling with user having invalid timezone."""
+    from unittest.mock import MagicMock
+
+    mock_user_settings_store = MagicMock()
+    mock_job_table = MagicMock()
+    mock_deduplication_index = MagicMock()
+
+    # Set up user with invalid timezone
+    mock_user_settings_store.get_all_users = MagicMock(return_value=['user_invalid_tz'])
+    mock_user_settings_store.get_user_settings.return_value = {'timezone': 'Invalid/Timezone'}
+
+    test_time = datetime(2025, 7, 12, 0, 0, 0, tzinfo=UTC)
+
+    schedule_work_sampling_jobs(
+        now_utc=test_time,
+        user_settings_store=mock_user_settings_store,
+        job_table=mock_job_table,
+        deduplication_index=mock_deduplication_index,
+    )
+
+    # Should schedule 5 jobs for the user (falling back to UTC)
+    assert mock_job_table.put_job.call_count == 5
+
+
+def test_get_all_users_no_mock_method() -> None:
+    """Test _get_all_users when store doesn't have get_all_users method."""
+    from companion_memory.user_settings import DynamoUserSettingsStore
+    from companion_memory.work_sampling_scheduler import _get_all_users
+
+    store = DynamoUserSettingsStore()
+    # This store doesn't have get_all_users method
+    users = _get_all_users(store)
+    assert users == []
+
+
+def test_get_all_users_non_list_return() -> None:
+    """Test _get_all_users when mock method returns non-list."""
+    from unittest.mock import MagicMock
+
+    from companion_memory.work_sampling_scheduler import _get_all_users
+
+    store = MagicMock()
+    store.get_all_users = MagicMock(return_value='not a list')  # Return non-list
+
+    users = _get_all_users(store)
+    assert users == []

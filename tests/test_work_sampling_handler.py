@@ -12,7 +12,8 @@ from companion_memory.work_sampling_handler import PROMPT_VARIATIONS, WorkSampli
 
 def test_work_sampling_handler_payload_model() -> None:
     """Test that WorkSamplingHandler returns correct payload model."""
-    assert WorkSamplingHandler.payload_model() == WorkSamplingPayload
+    model = WorkSamplingHandler.payload_model()
+    assert model == WorkSamplingPayload
 
 
 def test_work_sampling_handler_registration() -> None:
