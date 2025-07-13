@@ -9,6 +9,13 @@ from pydantic import BaseModel, Field
 JobStatus = Literal['pending', 'in_progress', 'completed', 'failed', 'dead_letter', 'cancelled']
 
 
+class WorkSamplingPayload(BaseModel):
+    """Payload model for work sampling prompt jobs."""
+
+    user_id: str = Field(description='Slack user ID to send prompt to')
+    slot_index: int = Field(description='Time slot index within the workday')
+
+
 class ScheduledJob(BaseModel):
     """Data model for a scheduled job in DynamoDB."""
 

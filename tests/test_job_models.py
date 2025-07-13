@@ -5,7 +5,7 @@ from uuid import UUID
 
 import pytest
 
-from companion_memory.job_models import ScheduledJob, make_job_sk, parse_job_sk
+from companion_memory.job_models import ScheduledJob, WorkSamplingPayload, make_job_sk, parse_job_sk
 
 
 def test_job_model_serializes_correctly() -> None:
@@ -67,3 +67,25 @@ def test_parse_job_sk_invalid_format() -> None:
 
     with pytest.raises(ValueError, match='Invalid sort key format'):
         parse_job_sk('scheduled#invalid-timestamp#uuid')
+
+
+def test_work_sampling_payload_validation() -> None:
+    """Test that WorkSamplingPayload validates correctly."""
+    # Valid payload
+    payload = WorkSamplingPayload(user_id='U123456', slot_index=2)
+    assert payload.user_id == 'U123456'
+    assert payload.slot_index == 2
+
+    # Test serialization
+    data = payload.model_dump()
+    assert data['user_id'] == 'U123456'
+    assert data['slot_index'] == 2
+
+    # Test deserialization
+    restored = WorkSamplingPayload.model_validate(data)
+    assert restored.user_id == 'U123456'
+    assert restored.slot_index == 2
+
+    # Test invalid data (should raise validation error)
+    with pytest.raises(ValueError, match='slot_index'):
+        WorkSamplingPayload.model_validate({'user_id': 'U123456'})  # Missing slot_index
