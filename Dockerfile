@@ -15,4 +15,4 @@ RUN python -m uv sync
 
 EXPOSE 8000
 
-CMD ["python", "-m", "uv", "run", "gunicorn", "--bind", ":8000", "--workers", "2", "--access-logfile", "-", "--error-logfile", "-", "companion_memory.wsgi"]
+CMD ["python", "-m", "uv", "run", "gunicorn", "-c", "gunicorn.conf.py", "companion_memory.wsgi"]
