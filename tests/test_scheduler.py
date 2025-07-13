@@ -340,8 +340,8 @@ def test_distributed_scheduler_start_success() -> None:
         assert scheduler.started is True
         mock_scheduler.start.assert_called_once()
         assert (
-            mock_scheduler.add_job.call_count == 5
-        )  # lock_manager + heartbeat + user_timezone_sync + daily_summary_scheduler + job_worker_poller
+            mock_scheduler.add_job.call_count == 6
+        )  # lock_manager + heartbeat + user_timezone_sync + daily_summary_scheduler + work_sampling_scheduler + job_worker_poller
         mock_acquire.assert_called_once()
 
 
@@ -543,10 +543,11 @@ def test_distributed_scheduler_remove_active_jobs() -> None:
         # Call the method
         scheduler._remove_active_jobs()  # noqa: SLF001
 
-        # Should remove three jobs
-        assert mock_scheduler.remove_job.call_count == 3
+        # Should remove four jobs
+        assert mock_scheduler.remove_job.call_count == 4
         mock_scheduler.remove_job.assert_any_call('heartbeat_logger')
         mock_scheduler.remove_job.assert_any_call('daily_summary_scheduler')
+        mock_scheduler.remove_job.assert_any_call('work_sampling_scheduler')
         mock_scheduler.remove_job.assert_any_call('job_worker_poller')
         assert scheduler._jobs_added is False  # noqa: SLF001
 
@@ -793,10 +794,10 @@ def test_distributed_scheduler_job_worker_disabled() -> None:
         with patch.object(scheduler.lock, 'acquire', mock_acquire):
             scheduler.start()
 
-        # Should only add 4 jobs (not including job worker poller)
+        # Should only add 5 jobs (not including job worker poller)
         assert (
-            mock_scheduler.add_job.call_count == 4
-        )  # lock_manager + heartbeat + user_timezone_sync + daily_summary_scheduler
+            mock_scheduler.add_job.call_count == 5
+        )  # lock_manager + heartbeat + user_timezone_sync + daily_summary_scheduler + work_sampling_scheduler
 
 
 def test_distributed_scheduler_remove_job_worker_poller() -> None:
@@ -812,8 +813,9 @@ def test_distributed_scheduler_remove_job_worker_poller() -> None:
         # Call the method
         scheduler._remove_active_jobs()  # noqa: SLF001
 
-        # Should attempt to remove daily_summary_scheduler and job_worker_poller along with other jobs
+        # Should attempt to remove all scheduler jobs
         mock_scheduler.remove_job.assert_any_call('daily_summary_scheduler')
+        mock_scheduler.remove_job.assert_any_call('work_sampling_scheduler')
         mock_scheduler.remove_job.assert_any_call('job_worker_poller')
 
 
@@ -881,3 +883,63 @@ def test_distributed_scheduler_schedule_daily_summaries_exception() -> None:
 
             # Should log the exception
             mock_logger.exception.assert_called_once_with('Error scheduling daily summaries')
+
+
+def test_distributed_scheduler_schedule_work_sampling_jobs_without_lock() -> None:
+    """Test _schedule_work_sampling_jobs when lock is not held."""
+    with patch('boto3.resource'):
+        scheduler = DistributedScheduler('TestTable')
+        scheduler.lock.lock_acquired = False
+
+        # Call the method - should return early
+        scheduler._schedule_work_sampling_jobs()  # noqa: SLF001
+
+
+def test_distributed_scheduler_schedule_work_sampling_jobs_with_lock() -> None:
+    """Test _schedule_work_sampling_jobs when lock is held."""
+    with (
+        patch('boto3.resource'),
+        patch('companion_memory.work_sampling_scheduler.schedule_work_sampling_jobs') as mock_schedule_fn,
+        patch('companion_memory.user_settings.DynamoUserSettingsStore') as mock_settings_store,
+        patch('companion_memory.job_table.JobTable') as mock_job_table,
+        patch('companion_memory.deduplication.DeduplicationIndex') as mock_dedup_index,
+        patch('companion_memory.scheduler.logger') as mock_logger,
+    ):
+        scheduler = DistributedScheduler('TestTable')
+        scheduler.lock.lock_acquired = True
+
+        # Call the method
+        scheduler._schedule_work_sampling_jobs()  # noqa: SLF001
+
+        # Verify components were created
+        mock_settings_store.assert_called_once()
+        mock_job_table.assert_called_once()
+        mock_dedup_index.assert_called_once()
+
+        # Verify scheduling function was called with proper dependencies
+        mock_schedule_fn.assert_called_once_with(
+            user_settings_store=mock_settings_store.return_value,
+            job_table=mock_job_table.return_value,
+            deduplication_index=mock_dedup_index.return_value,
+        )
+
+        # Should log success
+        mock_logger.info.assert_called_with('Scheduled work sampling prompt jobs')
+
+
+def test_distributed_scheduler_schedule_work_sampling_jobs_exception() -> None:
+    """Test _schedule_work_sampling_jobs when an exception occurs."""
+    with (
+        patch('boto3.resource'),
+        patch('companion_memory.scheduler.logger') as mock_logger,
+    ):
+        scheduler = DistributedScheduler('TestTable')
+        scheduler.lock.lock_acquired = True
+
+        # Mock DynamoUserSettingsStore to raise an exception
+        with patch('companion_memory.user_settings.DynamoUserSettingsStore', side_effect=Exception('Import error')):
+            # Call the method - should not raise exception
+            scheduler._schedule_work_sampling_jobs()  # noqa: SLF001
+
+            # Should log the exception
+            mock_logger.exception.assert_called_once_with('Error scheduling work sampling jobs')

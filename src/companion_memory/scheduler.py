@@ -256,6 +256,11 @@ class DistributedScheduler:
             self._schedule_daily_summaries, 'cron', hour=0, id='daily_summary_scheduler', max_instances=1
         )
 
+        # Schedule work sampling prompt scheduling job (runs daily at midnight UTC)
+        self.scheduler.add_job(
+            self._schedule_work_sampling_jobs, 'cron', hour=0, id='work_sampling_scheduler', max_instances=1
+        )
+
         # Schedule job worker polling if enabled
         if self._job_worker_enabled:
             self.scheduler.add_job(
@@ -281,6 +286,10 @@ class DistributedScheduler:
         # Remove daily summary scheduler
         with contextlib.suppress(Exception):
             self.scheduler.remove_job('daily_summary_scheduler')
+
+        # Remove work sampling scheduler
+        with contextlib.suppress(Exception):
+            self.scheduler.remove_job('work_sampling_scheduler')
 
         # Remove job worker poller
         with contextlib.suppress(Exception):
@@ -351,6 +360,36 @@ class DistributedScheduler:
 
         except Exception:
             logger.exception('Error scheduling daily summaries')
+
+    def _schedule_work_sampling_jobs(self) -> None:
+        """Schedule work sampling prompt jobs for all users."""
+        # Double-check we still have the lock before processing
+        if not self.lock.lock_acquired:
+            return
+
+        try:
+            # Lazy import to avoid circular imports
+            from companion_memory.deduplication import DeduplicationIndex
+            from companion_memory.job_table import JobTable
+            from companion_memory.user_settings import DynamoUserSettingsStore
+            from companion_memory.work_sampling_scheduler import schedule_work_sampling_jobs
+
+            # Set up dependencies
+            user_settings_store = DynamoUserSettingsStore()
+            job_table = JobTable()
+            deduplication_index = DeduplicationIndex()
+
+            # Schedule work sampling jobs
+            schedule_work_sampling_jobs(
+                user_settings_store=user_settings_store,
+                job_table=job_table,
+                deduplication_index=deduplication_index,
+            )
+
+            logger.info('Scheduled work sampling prompt jobs')
+
+        except Exception:
+            logger.exception('Error scheduling work sampling jobs')
 
     def configure_dependencies(self, log_store: LogStore, llm: LLMClient) -> None:
         """Configure log store and LLM dependencies for scheduler jobs.
