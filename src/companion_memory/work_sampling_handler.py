@@ -7,6 +7,9 @@ from pydantic import BaseModel
 from companion_memory.job_dispatcher import BaseJobHandler, register_handler
 from companion_memory.job_models import WorkSamplingPayload
 
+# Global configuration for work sampling
+WORK_SAMPLING_PROMPTS_PER_DAY = 5
+
 # Prompt variations for work sampling
 PROMPT_VARIATIONS = [
     'What are you working on right now?',
