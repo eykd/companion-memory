@@ -251,14 +251,14 @@ class DistributedScheduler:
         # Schedule user time zone sync every 6 hours
         self.scheduler.add_job(sync_user_timezone, 'interval', hours=6, id='user_timezone_sync', max_instances=1)
 
-        # Schedule daily summary scheduling job (runs daily at midnight UTC)
+        # Schedule daily summary scheduling job (runs hourly)
         self.scheduler.add_job(
-            self._schedule_daily_summaries, 'cron', hour=0, id='daily_summary_scheduler', max_instances=1
+            self._schedule_daily_summaries, 'interval', hours=1, id='daily_summary_scheduler', max_instances=1
         )
 
-        # Schedule work sampling prompt scheduling job (runs daily at midnight UTC)
+        # Schedule work sampling prompt scheduling job (runs hourly)
         self.scheduler.add_job(
-            self._schedule_work_sampling_jobs, 'cron', hour=0, id='work_sampling_scheduler', max_instances=1
+            self._schedule_work_sampling_jobs, 'interval', hours=1, id='work_sampling_scheduler', max_instances=1
         )
 
         # Schedule job worker polling if enabled

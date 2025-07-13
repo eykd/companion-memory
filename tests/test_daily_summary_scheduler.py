@@ -235,9 +235,9 @@ def test_scheduler_registers_daily_summary_job() -> None:
                 args, kwargs = call
                 if len(args) > 0 and hasattr(args[0], '__name__') and 'schedule_daily_summaries' in args[0].__name__:
                     daily_summary_job_found = True
-                    # Check it has the right cron schedule (daily at midnight UTC)
-                    assert 'cron' in args or kwargs.get('trigger') == 'cron'
-                    assert kwargs.get('hour') == 0 or (len(args) > 2 and 'hour' in str(args[2]))
+                    # Check it has the right interval schedule (hourly)
+                    assert 'interval' in args or kwargs.get('trigger') == 'interval'
+                    assert kwargs.get('hours') == 1 or (len(args) > 2 and 'hours' in str(args[2]))
                     break
 
             assert daily_summary_job_found, 'Daily summary scheduling job not found in scheduler jobs'
