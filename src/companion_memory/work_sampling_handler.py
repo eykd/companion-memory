@@ -12,11 +12,11 @@ WORK_SAMPLING_PROMPTS_PER_DAY = 5
 
 # Prompt variations for work sampling
 PROMPT_VARIATIONS = [
-    'What are you working on right now?',
+    'What are you working on right now? `/log` to take note.',
     "Got a minute? Log what you're doing with `/log`.",
-    "Quick check-in: what's your focus at the moment?",
-    'Still on track? Drop a note with `/log`.',
-    'Pause and reflect: what are you doing right now?',
+    "Quick check-in: what's your focus at the moment? `/log` to take note.",
+    'Still on track? Drop a note with `/log` to take note.',
+    'Pause and reflect: what are you doing right now? `/log` to take note.',
 ]
 
 
