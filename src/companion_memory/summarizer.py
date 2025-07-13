@@ -79,12 +79,14 @@ def _build_summary_prompt(logs_text: str, period: str) -> str:
 
         Using these log entries, provide a concise summary of the main activities and themes.
         - Instead of specific times, refer to general times of the day.
+        - Include both the name of the day and the date.
         - Include any relevant metrics or insights that are relevant to the executive's work.
         - Use the second person (you), as if you were addressing the executive directly in conversation.
         - Do not include a preamble, address, or salutation.
         - Do not invite the executive to respond or follow up.
         - Do not include any other text than the summary.
         - Format your summary as a bulleted list.
+        - At the end of the summary, make note of any items that are not yet complete or left unaddressed.
 """
     )
 
