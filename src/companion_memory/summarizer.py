@@ -86,8 +86,8 @@ def _build_summary_prompt(logs_text: str, period: str) -> str:
         - Do not invite the executive to respond or follow up.
         - Do not include any other text than the summary.
         - Format your summary as a bulleted list.
-        - At the end of the summary, make note of any items that are not yet complete or left unaddressed.
-"""
+        - At the end of the summary, make note of any items that are not yet complete or appear to have been left unaddressed.
+        """
     )
 
 
