@@ -144,3 +144,74 @@ def test_llm_client_constructor_overrides_environment_variable(mock_llm_module: 
         # Verify constructor model was requested (not environment)
         mock_llm_module.get_model.assert_called_once_with('claude-3-sonnet')
         assert result == 'Constructor model response'
+
+
+def test_llm_client_retries_on_overloaded_api_error(mock_llm_module: MagicMock) -> None:
+    """Test that LLMLClient retries on overloaded API errors."""
+    mock_model = MagicMock()
+    mock_response = MagicMock()
+
+    # Mock APIStatusError (using a generic Exception for testing)
+    overloaded_error = Exception(
+        "{'type': 'error', 'error': {'details': None, 'type': 'overloaded_error', 'message': 'Overloaded'}}"
+    )
+
+    # First two calls fail with overloaded error, third succeeds
+    mock_response.text.side_effect = [overloaded_error, overloaded_error, 'Success after retries']
+
+    mock_model.prompt.return_value = mock_response
+    mock_llm_module.get_model.return_value = mock_model
+
+    with patch('companion_memory.llm_client.llm', mock_llm_module):
+        client = LLMLClient()
+        result = client.complete('Test prompt')
+
+        # Verify that text() was called 3 times (2 failures + 1 success)
+        assert mock_response.text.call_count == 3
+        assert result == 'Success after retries'
+
+
+def test_llm_client_gives_up_on_non_overloaded_error(mock_llm_module: MagicMock) -> None:
+    """Test that LLMLClient doesn't retry on non-overloaded errors."""
+    mock_model = MagicMock()
+    mock_response = MagicMock()
+
+    # Mock a non-overloaded error
+    non_overloaded_error = Exception('Invalid API key')
+    mock_response.text.side_effect = non_overloaded_error
+
+    mock_model.prompt.return_value = mock_response
+    mock_llm_module.get_model.return_value = mock_model
+
+    with patch('companion_memory.llm_client.llm', mock_llm_module):
+        client = LLMLClient()
+
+        with pytest.raises(LLMGenerationError, match='Error generating completion'):
+            client.complete('Test prompt')
+
+        # Verify that text() was only called once (no retries)
+        assert mock_response.text.call_count == 1
+
+
+def test_llm_client_exhausts_retries_on_persistent_overload(mock_llm_module: MagicMock) -> None:
+    """Test that LLMLClient exhausts retries on persistent overload errors."""
+    mock_model = MagicMock()
+    mock_response = MagicMock()
+
+    # Mock persistent overloaded error
+    overloaded_error = Exception(
+        "{'type': 'error', 'error': {'details': None, 'type': 'overloaded_error', 'message': 'Overloaded'}}"
+    )
+    mock_response.text.side_effect = overloaded_error
+
+    mock_model.prompt.return_value = mock_response
+    mock_llm_module.get_model.return_value = mock_model
+
+    with patch('companion_memory.llm_client.llm', mock_llm_module):
+        client = LLMLClient()
+
+        with pytest.raises(LLMGenerationError, match='Error generating completion'):
+            client.complete('Test prompt')
+
+        # Verify that text() was called 3 times (max retries)
+        assert mock_response.text.call_count == 3
