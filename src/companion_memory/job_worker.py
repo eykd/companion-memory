@@ -105,8 +105,12 @@ class JobWorker:
                 continue
 
             # Claim and run the job
+            logger.info('Attempting to claim and run job %s (type=%s)', job.job_id, job.job_type)
             if self._claim_and_run(job, now):
                 processed_count += 1
+                logger.info('Successfully processed job %s', job.job_id)
+            else:
+                logger.info('Failed to claim job %s', job.job_id)
 
         return processed_count
 
@@ -184,7 +188,9 @@ class JobWorker:
         """
         try:
             # Dispatch job to handler
+            logger.info('Dispatching job %s (type=%s) to handler', job.job_id, job.job_type)
             self._dispatcher.dispatch(job)
+            logger.info('Job %s dispatched successfully', job.job_id)
 
             # Mark job as completed
             self._job_table.update_job_status(
@@ -198,6 +204,7 @@ class JobWorker:
 
         except Exception as e:  # noqa: BLE001
             # Handle job failure with retry policy
+            logger.exception('Job %s failed during processing', job.job_id)
             self._handle_job_failure(job, e, now)
 
     def _handle_job_failure(self, job: ScheduledJob, error: Exception, now: datetime) -> None:

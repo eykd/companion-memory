@@ -94,6 +94,12 @@ class JobTable:
 
         response = self._table.query(KeyConditionExpression=Key('PK').eq('job') & Key('SK').lte(query_sk), Limit=limit)
 
+        # Debug logging to understand what's being retrieved
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.info('DynamoDB query for jobs <= %s returned %d items', query_sk, len(response.get('Items', [])))
+
         jobs = []
         for item in response.get('Items', []):
             job = self._item_to_job(item)
