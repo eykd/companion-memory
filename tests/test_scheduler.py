@@ -764,6 +764,7 @@ def test_distributed_scheduler_poll_and_process_jobs_no_jobs_processed() -> None
         # Should log polling started, job worker initialized, and job count
         expected_calls = [
             call('Job worker polling started'),
+            call('Job worker initialized with handlers: %s', []),
             call('Job worker initialized for scheduler integration'),
             call('Job worker found %d due jobs during polling', 0),
         ]

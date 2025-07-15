@@ -340,6 +340,9 @@ class DistributedScheduler:
                 # Register all handlers with the job worker
                 self._job_worker.register_all_handlers_from_global()
 
+                # Debug logging to show registered handlers
+                registered_handlers = self._job_worker.get_registered_handlers()
+                logger.info('Job worker initialized with handlers: %s', list(registered_handlers.keys()))
                 logger.info('Job worker initialized for scheduler integration')
 
             # Poll and process jobs
