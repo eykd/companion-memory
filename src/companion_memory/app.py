@@ -1,5 +1,6 @@
 """Flask web application for webhook handling."""
 
+import atexit
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -104,10 +105,11 @@ def create_app(
 
         # Add scheduled jobs here
 
-        # Register cleanup on app teardown
-        @app.teardown_appcontext  # type: ignore[type-var]
-        def cleanup_scheduler(exc: Exception | None) -> None:  # noqa: ARG001
+        # Register cleanup on application shutdown
+        def cleanup_scheduler() -> None:
             scheduler.shutdown()
+
+        atexit.register(cleanup_scheduler)
 
     else:
         app.logger.info('Scheduler disabled by configuration')
