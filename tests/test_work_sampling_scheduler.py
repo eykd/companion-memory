@@ -266,8 +266,11 @@ def test_schedule_work_sampling_jobs_default_now_utc() -> None:
 
 def test_schedule_work_sampling_jobs_default_dependencies() -> None:
     """Test scheduling with default dependency instances."""
+    from unittest.mock import patch
+
     # This tests the lines where dependencies are created if None
-    schedule_work_sampling_jobs()
+    with patch('boto3.resource'):
+        schedule_work_sampling_jobs()
 
     # Should complete without error (no users found in default implementation)
 
@@ -299,13 +302,17 @@ def test_schedule_work_sampling_jobs_invalid_timezone() -> None:
 
 def test_get_all_users_no_mock_method() -> None:
     """Test _get_all_users when store doesn't have get_all_users method."""
-    from companion_memory.user_settings import DynamoUserSettingsStore
+    from unittest.mock import patch
+
     from companion_memory.work_sampling_scheduler import _get_all_users
 
-    store = DynamoUserSettingsStore()
-    # This store doesn't have get_all_users method
-    users = _get_all_users(store)
-    assert users == []
+    with patch('boto3.resource'):
+        from companion_memory.user_settings import DynamoUserSettingsStore
+
+        store = DynamoUserSettingsStore()
+        # This store doesn't have get_all_users method
+        users = _get_all_users(store)
+        assert users == []
 
 
 def test_get_all_users_non_list_return() -> None:
