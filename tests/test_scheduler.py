@@ -763,6 +763,73 @@ def test_distributed_scheduler_poll_and_process_jobs_no_jobs_processed() -> None
         mock_logger.info.assert_called_once_with('Job worker initialized for scheduler integration')
 
 
+def test_distributed_scheduler_poll_and_process_jobs_debug_logging_with_due_jobs() -> None:
+    """Test _poll_and_process_jobs debug logging when jobs are found but not processed."""
+    from datetime import UTC, datetime
+    from uuid import UUID
+
+    from companion_memory.job_models import ScheduledJob
+
+    with (
+        patch('boto3.resource'),
+        patch('companion_memory.job_table.JobTable') as mock_job_table_class,
+        patch('companion_memory.job_worker.JobWorker') as mock_job_worker_class,
+        patch('companion_memory.scheduler.logger') as mock_logger,
+    ):
+        # Create mock due jobs
+        due_job1 = ScheduledJob(
+            job_id=UUID('12345678-1234-5678-9abc-123456789abc'),
+            job_type='test_job',
+            payload={'test': 'data'},
+            scheduled_for=datetime.now(UTC),
+            status='pending',
+            attempts=0,
+            created_at=datetime.now(UTC),
+        )
+        due_job2 = ScheduledJob(
+            job_id=UUID('87654321-4321-8765-cba9-987654321abc'),
+            job_type='another_job',
+            payload={'other': 'data'},
+            scheduled_for=datetime.now(UTC),
+            status='pending',
+            attempts=0,
+            created_at=datetime.now(UTC),
+        )
+
+        # Mock job table with due jobs
+        mock_job_table = MagicMock()
+        mock_job_table.get_due_jobs.return_value = [due_job1, due_job2]
+        mock_job_table_class.return_value = mock_job_table
+
+        # Mock job worker that processes 0 jobs
+        mock_job_worker = MagicMock()
+        mock_job_worker.poll_and_process_jobs.return_value = 0  # No jobs processed
+        mock_job_worker_class.return_value = mock_job_worker
+
+        scheduler = DistributedScheduler('TestTable')
+        scheduler.lock.lock_acquired = True
+
+        # Call the method
+        scheduler._poll_and_process_jobs()  # noqa: SLF001
+
+        # Verify debug logging was called
+        mock_logger.debug.assert_any_call('Job worker found %d due jobs during polling', 2)
+        mock_logger.debug.assert_any_call(
+            'Due job: %s, type=%s, status=%s, scheduled_for=%s',
+            due_job1.job_id,
+            due_job1.job_type,
+            due_job1.status,
+            due_job1.scheduled_for,
+        )
+        mock_logger.debug.assert_any_call(
+            'Due job: %s, type=%s, status=%s, scheduled_for=%s',
+            due_job2.job_id,
+            due_job2.job_type,
+            due_job2.status,
+            due_job2.scheduled_for,
+        )
+
+
 def test_distributed_scheduler_poll_and_process_jobs_exception() -> None:
     """Test _poll_and_process_jobs when an exception occurs."""
     with (

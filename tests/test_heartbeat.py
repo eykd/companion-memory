@@ -100,6 +100,58 @@ def test_run_heartbeat_timed_job_generates_uuid_and_logs() -> None:
         mock_schedule_event.assert_called_once_with(test_uuid)
 
 
+def test_run_heartbeat_timed_job_handles_scheduling_failure() -> None:
+    """Test that run_heartbeat_timed_job handles scheduling failures gracefully."""
+    from unittest.mock import patch
+
+    from companion_memory.heartbeat import run_heartbeat_timed_job
+
+    with (
+        patch('companion_memory.heartbeat.uuid.uuid1') as mock_uuid1,
+        patch('companion_memory.heartbeat.schedule_event_heartbeat_job') as mock_schedule_event,
+        patch('companion_memory.heartbeat.logger') as mock_logger,
+    ):
+        # Mock UUID generation
+        test_uuid = '01D3B4F8-1F35-11EF-AC22-7B4E4C2AD94E'
+        mock_uuid1.return_value = test_uuid
+
+        # Make scheduling fail
+        mock_schedule_event.side_effect = RuntimeError('Scheduling failed')
+
+        # Call the function
+        run_heartbeat_timed_job()
+
+        # Verify UUID generation
+        mock_uuid1.assert_called_once()
+
+        # Verify both timed log and exception log are called
+        mock_logger.info.assert_called_once_with('Heartbeat (timed): UUID=%s', test_uuid)
+        mock_logger.exception.assert_called_once_with('Failed to schedule heartbeat event job for UUID=%s', test_uuid)
+
+
+def test_schedule_event_heartbeat_job_handles_put_job_failure() -> None:
+    """Test that schedule_event_heartbeat_job handles job creation failures."""
+    from unittest.mock import MagicMock, patch
+
+    from companion_memory.heartbeat import schedule_event_heartbeat_job
+
+    with (
+        patch('companion_memory.job_table.JobTable') as mock_job_table_class,
+        patch('companion_memory.heartbeat.logger') as mock_logger,
+    ):
+        # Make job table put_job fail
+        mock_job_table = MagicMock()
+        mock_job_table.put_job.side_effect = RuntimeError('DynamoDB failed')
+        mock_job_table_class.return_value = mock_job_table
+
+        # Call should raise the exception
+        with pytest.raises(RuntimeError, match='DynamoDB failed'):
+            schedule_event_heartbeat_job('test-uuid-123')
+
+        # Verify exception was logged
+        mock_logger.exception.assert_called_once_with('Failed to create heartbeat event job')
+
+
 def test_run_heartbeat_event_job_logs_with_uuid() -> None:
     """Test that run_heartbeat_event_job logs correctly with provided UUID."""
     from unittest.mock import patch
