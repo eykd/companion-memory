@@ -100,7 +100,7 @@ class JobWorker:
                 # Log why job was skipped
                 if job.status != 'pending':
                     logger.info('Skipping job %s: status=%s (not pending)', job.job_id, job.status)
-                elif job.lock_expires_at is not None and job.lock_expires_at > now:
+                elif job.lock_expires_at is not None and job.lock_expires_at > now:  # pragma: no branch
                     logger.info('Skipping job %s: locked until %s', job.job_id, job.lock_expires_at)
                 continue
 
