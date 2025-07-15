@@ -152,6 +152,29 @@ def test_schedule_event_heartbeat_job_handles_put_job_failure() -> None:
         mock_logger.exception.assert_called_once_with('Failed to create heartbeat event job')
 
 
+def test_heartbeat_event_handler_with_exception_in_run_function() -> None:
+    """Test heartbeat handler exception handling when run_heartbeat_event_job fails."""
+    from unittest.mock import patch
+
+    from companion_memory.heartbeat import HeartbeatEventHandler, HeartbeatEventPayload
+
+    handler = HeartbeatEventHandler()
+    payload = HeartbeatEventPayload(heartbeat_uuid='test-uuid-456')
+
+    # Mock run_heartbeat_event_job to raise an exception
+    with (
+        patch(
+            'companion_memory.heartbeat.run_heartbeat_event_job', side_effect=RuntimeError('Event processing failed')
+        ),
+        patch('companion_memory.heartbeat.logger') as mock_logger,
+        pytest.raises(RuntimeError, match='Event processing failed'),
+    ):
+        handler.handle(payload)
+
+    # Verify exception was logged
+    mock_logger.exception.assert_called_once_with('HEARTBEAT HANDLER EXCEPTION: uuid=%s', 'test-uuid-456')
+
+
 def test_run_heartbeat_event_job_logs_with_uuid() -> None:
     """Test that run_heartbeat_event_job logs correctly with provided UUID."""
     from unittest.mock import patch
