@@ -43,6 +43,6 @@ def when_ready(server: object) -> None:  # noqa: ARG001
 
 # Gunicorn configuration
 bind = ':8000'
-workers = 2
+workers = 1
 access_logfile = '-'
 error_logfile = '-'
