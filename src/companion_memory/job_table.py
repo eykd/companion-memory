@@ -89,7 +89,8 @@ class JobTable:
 
         """
         # Query for jobs with SK up to the current time
-        query_sk = f'scheduled#{now.isoformat()}'
+        # Use a high Unicode character to ensure we capture all UUIDs for timestamps <= now
+        query_sk = f'scheduled#{now.isoformat()}#\uffff'
 
         response = self._table.query(KeyConditionExpression=Key('PK').eq('job') & Key('SK').lte(query_sk), Limit=limit)
 
