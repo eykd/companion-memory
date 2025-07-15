@@ -70,7 +70,7 @@ def test_scheduler_registers_heartbeat_cron_job_when_enabled() -> None:
 
 def test_run_heartbeat_timed_job_generates_uuid_and_logs() -> None:
     """Test that run_heartbeat_timed_job generates UUIDv1 and logs correctly."""
-    from unittest.mock import patch
+    from unittest.mock import call, patch
 
     from companion_memory.heartbeat import run_heartbeat_timed_job
 
@@ -89,8 +89,12 @@ def test_run_heartbeat_timed_job_generates_uuid_and_logs() -> None:
         # Verify UUID generation
         mock_uuid1.assert_called_once()
 
-        # Verify logging
-        mock_logger.info.assert_called_once_with('Heartbeat (timed): UUID=%s', test_uuid)
+        # Verify logging (now includes 2 log calls: timed heartbeat + event scheduled)
+        expected_calls = [
+            call('Heartbeat (timed): UUID=%s', test_uuid),
+            call('Scheduled heartbeat event job for UUID=%s', test_uuid),
+        ]
+        mock_logger.info.assert_has_calls(expected_calls)
 
         # Verify event job scheduling
         mock_schedule_event.assert_called_once_with(test_uuid)

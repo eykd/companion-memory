@@ -344,6 +344,24 @@ class DistributedScheduler:
             processed_count = self._job_worker.poll_and_process_jobs()
             if processed_count > 0:
                 logger.info('Scheduler processed %d jobs', processed_count)
+            else:
+                # Debug logging to understand why no jobs are being processed
+                from datetime import UTC, datetime
+
+                from companion_memory.job_table import JobTable
+
+                job_table = JobTable()
+                due_jobs = job_table.get_due_jobs(datetime.now(UTC), limit=5)
+                logger.debug('Job worker found %d due jobs during polling', len(due_jobs))
+                if due_jobs:
+                    for job in due_jobs:
+                        logger.debug(
+                            'Due job: %s, type=%s, status=%s, scheduled_for=%s',
+                            job.job_id,
+                            job.job_type,
+                            job.status,
+                            job.scheduled_for,
+                        )
 
         except Exception:
             logger.exception('Error in job worker polling')

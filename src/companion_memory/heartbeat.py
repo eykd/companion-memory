@@ -73,7 +73,11 @@ def run_heartbeat_timed_job() -> None:
     logger.info('Heartbeat (timed): UUID=%s', str(heartbeat_uuid))
 
     # Schedule event-based heartbeat job with 10-second delay
-    schedule_event_heartbeat_job(str(heartbeat_uuid))
+    try:
+        schedule_event_heartbeat_job(str(heartbeat_uuid))
+        logger.info('Scheduled heartbeat event job for UUID=%s', str(heartbeat_uuid))
+    except Exception:
+        logger.exception('Failed to schedule heartbeat event job for UUID=%s', str(heartbeat_uuid))
 
 
 def run_heartbeat_event_job(heartbeat_uuid: str) -> None:
@@ -114,4 +118,9 @@ def schedule_event_heartbeat_job(heartbeat_uuid: str) -> None:
 
     # Store the job in DynamoDB
     job_table = JobTable()
-    job_table.put_job(job)
+    try:
+        job_table.put_job(job)
+        logger.info('Created heartbeat event job: job_id=%s, scheduled_for=%s', job.job_id, job.scheduled_for)
+    except Exception:
+        logger.exception('Failed to create heartbeat event job')
+        raise
