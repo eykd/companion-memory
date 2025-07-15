@@ -1,5 +1,6 @@
 """Job worker for polling and processing scheduled jobs."""
 
+import logging
 import traceback
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -13,6 +14,8 @@ from companion_memory.retry_policy import RetryPolicy
 
 if TYPE_CHECKING:  # pragma: no cover
     from companion_memory.job_table import JobTable
+
+logger = logging.getLogger(__name__)
 
 
 class JobWorker:
@@ -94,6 +97,11 @@ class JobWorker:
         for job in due_jobs:
             # Filter jobs that are eligible for processing
             if not self._is_job_eligible(job, now):
+                # Log why job was skipped
+                if job.status != 'pending':
+                    logger.info('Skipping job %s: status=%s (not pending)', job.job_id, job.status)
+                elif job.lock_expires_at is not None and job.lock_expires_at > now:
+                    logger.info('Skipping job %s: locked until %s', job.job_id, job.lock_expires_at)
                 continue
 
             # Claim and run the job

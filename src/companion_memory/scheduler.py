@@ -364,6 +364,8 @@ class DistributedScheduler:
                             job.status,
                             job.scheduled_for,
                         )
+                else:
+                    logger.info('No due jobs found - checking recent heartbeat job creation')
 
         except Exception:
             logger.exception('Error in job worker polling')
