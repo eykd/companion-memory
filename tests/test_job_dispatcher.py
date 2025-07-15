@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 import pytest
+from moto import mock_aws
 from pydantic import BaseModel
 
 from companion_memory.job_dispatcher import BaseJobHandler, JobDispatcher, register_all_handlers, register_handler
@@ -214,6 +215,7 @@ def test_get_registered_handlers() -> None:
     assert 'new_handler' not in dispatcher.get_registered_handlers()
 
 
+@mock_aws
 def test_heartbeat_and_work_sampling_handlers_are_registered() -> None:
     """Test that heartbeat and work sampling handlers are properly registered."""
     # Import the handler modules to ensure decorators are executed

@@ -283,6 +283,7 @@ def test_worker_handles_job_claim_failure() -> None:
         assert processed == 0
 
 
+@mock_aws
 def test_worker_register_all_handlers_from_global() -> None:
     """Test that worker can register all handlers from global dispatcher."""
     job_table = JobTable()
