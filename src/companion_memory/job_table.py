@@ -92,7 +92,11 @@ class JobTable:
         # Use a high Unicode character to ensure we capture all UUIDs for timestamps <= now
         query_sk = f'scheduled#{now.isoformat()}#\uffff'
 
-        response = self._table.query(KeyConditionExpression=Key('PK').eq('job') & Key('SK').lte(query_sk), Limit=limit)
+        response = self._table.query(
+            KeyConditionExpression=Key('PK').eq('job') & Key('SK').lte(query_sk),
+            FilterExpression=Key('status').eq('pending'),
+            Limit=limit
+        )
 
         # Debug logging to understand what's being retrieved
         import logging

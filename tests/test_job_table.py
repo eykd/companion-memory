@@ -112,3 +112,56 @@ def test_get_due_jobs_filters_by_time() -> None:
     due_jobs = job_table.get_due_jobs(now)
     assert len(due_jobs) == 1
     assert due_jobs[0].job_id == past_job.job_id
+
+
+@mock_aws
+def test_get_due_jobs_filters_out_failed_jobs() -> None:
+    """Test that get_due_jobs only returns pending jobs, not failed ones."""
+    job_table = JobTable()
+    job_table.create_table_for_testing()
+
+    now = datetime.now(UTC)
+
+    # Create pending job
+    pending_job = ScheduledJob(
+        job_id=uuid4(),
+        job_type='heartbeat_event',
+        payload={'heartbeat_uuid': 'test-pending'},
+        scheduled_for=now - timedelta(minutes=10),
+        status='pending',
+        attempts=0,
+        created_at=now,
+    )
+
+    # Create failed job (older, should be returned first without filter)
+    failed_job = ScheduledJob(
+        job_id=uuid4(),
+        job_type='heartbeat_event',
+        payload={'heartbeat_uuid': 'test-failed'},
+        scheduled_for=now - timedelta(hours=1),
+        status='failed',
+        attempts=3,
+        created_at=now - timedelta(hours=1),
+    )
+
+    # Create completed job
+    completed_job = ScheduledJob(
+        job_id=uuid4(),
+        job_type='heartbeat_event',
+        payload={'heartbeat_uuid': 'test-completed'},
+        scheduled_for=now - timedelta(minutes=30),
+        status='completed',
+        attempts=1,
+        created_at=now - timedelta(minutes=30),
+    )
+
+    # Store all jobs
+    job_table.put_job(pending_job)
+    job_table.put_job(failed_job)
+    job_table.put_job(completed_job)
+
+    # Should only return the pending job
+    due_jobs = job_table.get_due_jobs(now)
+    assert len(due_jobs) == 1
+    assert due_jobs[0].job_id == pending_job.job_id
+    assert due_jobs[0].status == 'pending'
