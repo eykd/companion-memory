@@ -1,6 +1,10 @@
 """Heartbeat diagnostic functionality."""
 
+import logging
 import os
+import uuid
+
+logger = logging.getLogger(__name__)
 
 
 def is_heartbeat_enabled() -> bool:
@@ -18,5 +22,30 @@ def schedule_heartbeat_job() -> None:
     """Timed heartbeat job that generates UUID and schedules follow-up event.
 
     This function will be scheduled to run every minute via cron.
+    """
+    run_heartbeat_timed_job()
+
+
+def run_heartbeat_timed_job() -> None:
+    """Execute the timed heartbeat job logic.
+
+    Generates UUIDv1, logs heartbeat message, and schedules event-based follow-up.
+    """
+    # Generate UUIDv1 (includes timestamp)
+    heartbeat_uuid = uuid.uuid1()
+
+    # Log the timed heartbeat
+    logger.info('Heartbeat (timed): UUID=%s', str(heartbeat_uuid))
+
+    # Schedule event-based heartbeat job with 10-second delay
+    schedule_event_heartbeat_job(str(heartbeat_uuid))
+
+
+def schedule_event_heartbeat_job(heartbeat_uuid: str) -> None:
+    """Schedule an event-based heartbeat job with 10-second delay.
+
+    Args:
+        heartbeat_uuid: The UUID to pass to the event job for logging.
+
     """
     # TODO: Implement in later steps
