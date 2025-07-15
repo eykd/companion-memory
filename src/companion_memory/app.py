@@ -106,7 +106,7 @@ def create_app(
         # Add scheduled jobs here
 
         # Register cleanup on application shutdown
-        def cleanup_scheduler() -> None:
+        def cleanup_scheduler() -> None:  # pragma: no cover
             scheduler.shutdown()
 
         atexit.register(cleanup_scheduler)
