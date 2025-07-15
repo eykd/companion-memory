@@ -95,17 +95,11 @@ def test_complete_job_lifecycle_schedule_to_completion() -> None:
     # (We can't easily verify handler execution without shared instance)
 
     # 5. Verify job status updated to completed
-    all_jobs = job_table.get_due_jobs(now + timedelta(hours=1))
-    completed_job = None
-    for j in all_jobs:
-        if j.job_id == job.job_id and j.status == 'completed':
-            completed_job = j
-            break
-
-    assert completed_job is not None
-    assert completed_job.status == 'completed'
-    assert completed_job.completed_at is not None
-    assert completed_job.locked_by is None  # Lock should be released
+    updated_job = job_table.get_job_by_id(job.job_id, job.scheduled_for)
+    assert updated_job is not None
+    assert updated_job.status == 'completed'
+    assert updated_job.completed_at is not None
+    assert updated_job.locked_by is None  # Lock should be released
 
 
 @mock_aws
@@ -246,16 +240,11 @@ def test_worker_handles_multiple_concurrent_jobs() -> None:
     processed_count = worker.poll_and_process_jobs(now)
     assert processed_count == 5
 
-    # Verify all jobs were processed (can't check handler state directly)
-
     # Verify all jobs are completed
-    all_jobs = job_table.get_due_jobs(now + timedelta(hours=1))
-    completed_jobs = [j for j in all_jobs if j.status == 'completed']
-    assert len(completed_jobs) == 5
-
-    # Verify all original job IDs are represented
-    completed_job_ids = {j.job_id for j in completed_jobs}
-    assert completed_job_ids == set(job_ids)
+    for job_id in job_ids:
+        updated_job = job_table.get_job_by_id(job_id, now - timedelta(minutes=1))
+        assert updated_job is not None
+        assert updated_job.status == 'completed'
 
 
 @mock_aws
@@ -314,13 +303,8 @@ def test_job_reaches_dead_letter_after_max_retries() -> None:
     assert processed_count == 1
 
     # Find dead letter job
-    all_jobs = job_table.get_due_jobs(retry_time + timedelta(hours=1))
-    dead_letter_job = None
-    for j in all_jobs:
-        if j.job_id == job.job_id and j.status == 'dead_letter':
-            dead_letter_job = j
-            break
-
+    all_jobs = job_table.get_all_jobs_by_id(job.job_id)
+    dead_letter_job = next((j for j in all_jobs if j.status == 'dead_letter'), None)
     assert dead_letter_job is not None
     assert dead_letter_job.status == 'dead_letter'
     assert dead_letter_job.attempts == 2

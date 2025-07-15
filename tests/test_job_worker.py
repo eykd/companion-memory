@@ -69,8 +69,8 @@ def test_worker_claims_and_dispatches_job() -> None:
     assert processed == 1
 
     # Verify job was processed by checking status
-    due_jobs = job_table.get_due_jobs(now + timedelta(minutes=1))
-    updated_job = due_jobs[0]
+    updated_job = job_table.get_job_by_id(job.job_id, job.scheduled_for)
+    assert updated_job is not None
     assert updated_job.status == 'completed'
     assert updated_job.completed_at is not None
 
@@ -157,10 +157,8 @@ def test_worker_acquires_lock_before_processing() -> None:
     assert processed == 1
 
     # Verify lock was acquired during processing
-    # (We can't easily test the exact moment of locking, but we can verify
-    # the final state shows it was completed by our worker)
-    due_jobs = job_table.get_due_jobs(now + timedelta(minutes=1))
-    updated_job = due_jobs[0]
+    updated_job = job_table.get_job_by_id(job.job_id, job.scheduled_for)
+    assert updated_job is not None
     assert updated_job.status == 'completed'
 
 
@@ -200,8 +198,8 @@ def test_worker_handles_processing_failure() -> None:
     assert processed == 1
 
     # Job should be marked as failed with incremented attempts
-    due_jobs = job_table.get_due_jobs(now + timedelta(hours=1))  # Look further ahead
-    updated_job = due_jobs[0]
+    updated_job = job_table.get_job_by_id(job.job_id, job.scheduled_for)
+    assert updated_job is not None
     assert updated_job.status == 'failed'
     assert updated_job.attempts == 1
     assert updated_job.last_error is not None
@@ -517,10 +515,9 @@ def test_worker_job_exceeds_max_attempts_goes_to_dead_letter() -> None:
     assert processed == 1
 
     # Job should be marked as dead_letter
-    jobs = job_table.get_due_jobs(now + timedelta(hours=1), limit=10)
-    dead_letter_jobs = [j for j in jobs if j.status == 'dead_letter']
-    assert len(dead_letter_jobs) == 1
-    assert dead_letter_jobs[0].job_id == job.job_id
+    updated_job = job_table.get_job_by_id(job.job_id, job.scheduled_for)
+    assert updated_job is not None
+    assert updated_job.status == 'dead_letter'
 
 
 @mock_aws
@@ -554,7 +551,7 @@ def test_worker_skips_locked_job_with_logging() -> None:
     assert processed == 0
 
     # Job should still be pending and locked
-    jobs = job_table.get_due_jobs(now + timedelta(minutes=1))
-    assert len(jobs) == 1
-    assert jobs[0].status == 'pending'
-    assert jobs[0].locked_by == 'other-worker'
+    updated_job = job_table.get_job_by_id(locked_job.job_id, locked_job.scheduled_for)
+    assert updated_job is not None
+    assert updated_job.status == 'pending'
+    assert updated_job.locked_by == 'other-worker'

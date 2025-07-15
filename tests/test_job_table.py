@@ -73,9 +73,9 @@ def test_update_job_status() -> None:
     job_table.update_job_status(job_id, now, 'in_progress')
 
     # Verify update
-    due_jobs = job_table.get_due_jobs(now + timedelta(minutes=1))
-    assert len(due_jobs) == 1
-    assert due_jobs[0].status == 'in_progress'
+    updated_job = job_table.get_job_by_id(job_id, now)
+    assert updated_job is not None
+    assert updated_job.status == 'in_progress'
 
 
 @mock_aws

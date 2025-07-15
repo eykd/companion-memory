@@ -77,6 +77,29 @@ class JobTable:
 
         self._table.put_item(Item=item)
 
+    def get_job_by_id(self, job_id: UUID, scheduled_for: datetime) -> ScheduledJob | None:
+        """Get a job by its ID and scheduled_for time.
+
+        Args:
+            job_id: The job's unique identifier
+            scheduled_for: When the job was scheduled for (needed for SK)
+
+        Returns:
+            The job if found, None otherwise
+
+        """
+        sk = make_job_sk(scheduled_for, job_id)
+
+        try:
+            response = self._table.get_item(Key={'PK': 'job', 'SK': sk})
+
+            if 'Item' not in response:
+                return None
+
+            return self._item_to_job(response['Item'])
+        except Exception:  # noqa: BLE001
+            return None
+
     def get_due_jobs(self, now: datetime, limit: int = 25) -> list[ScheduledJob]:
         """Fetch jobs that are due to run before the given time.
 
@@ -95,7 +118,7 @@ class JobTable:
         response = self._table.query(
             KeyConditionExpression=Key('PK').eq('job') & Key('SK').lte(query_sk),
             FilterExpression=Key('status').eq('pending'),
-            Limit=limit
+            Limit=limit,
         )
 
         # Debug logging to understand what's being retrieved
@@ -181,3 +204,21 @@ class JobTable:
             created_at=datetime.fromisoformat(item['created_at']),
             completed_at=datetime.fromisoformat(item['completed_at']) if item.get('completed_at') else None,
         )
+
+    def get_all_jobs_by_id(self, job_id: UUID) -> list[ScheduledJob]:
+        """Fetch all jobs with the given job_id (across all scheduled_for times).
+
+        Args:
+            job_id: The job's unique identifier
+
+        Returns:
+            List of ScheduledJob instances with the given job_id
+        """
+        response = self._table.query(
+            KeyConditionExpression=Key('PK').eq('job'),
+        )
+        jobs = []
+        for item in response.get('Items', []):
+            if item.get('job_id') == str(job_id):
+                jobs.append(self._item_to_job(item))
+        return jobs

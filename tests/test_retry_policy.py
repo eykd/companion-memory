@@ -140,13 +140,7 @@ def test_job_becomes_dead_letter_after_max_attempts() -> None:
     assert processed == 1
 
     # Find the job in any state
-    all_jobs = job_table.get_due_jobs(now + timedelta(days=1))
-    updated_job = None
-    for j in all_jobs:
-        if j.job_id == job.job_id:
-            updated_job = j
-            break
-
+    updated_job = job_table.get_job_by_id(job.job_id, job.scheduled_for)
     assert updated_job is not None
     assert updated_job.status == 'dead_letter'
     assert updated_job.attempts == 2
