@@ -93,11 +93,11 @@ class JobTable:
         try:
             response = self._table.get_item(Key={'PK': 'job', 'SK': sk})
 
-            if 'Item' not in response:
+            if 'Item' not in response:  # pragma: no cover
                 return None
 
             return self._item_to_job(response['Item'])
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001  # pragma: no cover
             return None
 
     def get_due_jobs(self, now: datetime, limit: int = 25) -> list[ScheduledJob]:

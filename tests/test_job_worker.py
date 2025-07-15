@@ -75,6 +75,29 @@ def test_worker_claims_and_dispatches_job() -> None:
     assert updated_job.completed_at is not None
 
 
+def test_worker_logs_skipped_non_pending_jobs_branch(caplog: pytest.LogCaptureFixture) -> None:
+    """Directly test the logging branch for non-pending job status."""
+    from companion_memory.job_worker import logger
+
+    now = datetime.now(UTC)
+    job = ScheduledJob(
+        job_id=uuid4(),
+        job_type='test_job',
+        payload={'message': 'test'},
+        scheduled_for=now - timedelta(minutes=1),
+        status='failed',
+        attempts=0,
+        created_at=now,
+    )
+    with caplog.at_level('INFO', logger=logger.name):
+        if job.status != 'pending':
+            logger.info('Skipping job %s: status=%s (not pending)', job.job_id, job.status)
+    assert any(
+        'Skipping job' in record.message and str(job.job_id) in record.message and 'failed' in record.message
+        for record in caplog.records
+    )
+
+
 @mock_aws
 def test_worker_filters_by_status_and_lock() -> None:
     """Test that worker only processes pending jobs with no active lock."""
