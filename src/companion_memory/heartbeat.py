@@ -34,12 +34,22 @@ class HeartbeatEventHandler(BaseJobHandler):
             payload: Validated payload containing heartbeat_uuid
 
         """
+        logger.info('HEARTBEAT HANDLER START: payload=%s, type=%s', payload, type(payload))
+
         if not isinstance(payload, HeartbeatEventPayload):
             msg = f'Expected HeartbeatEventPayload, got {type(payload)}'
+            logger.error('HEARTBEAT HANDLER ERROR: %s', msg)
             raise TypeError(msg)
 
+        logger.info('HEARTBEAT HANDLER VALIDATED: uuid=%s', payload.heartbeat_uuid)
+
         # Execute the heartbeat event logging
-        run_heartbeat_event_job(payload.heartbeat_uuid)
+        try:
+            run_heartbeat_event_job(payload.heartbeat_uuid)
+            logger.info('HEARTBEAT HANDLER SUCCESS: uuid=%s', payload.heartbeat_uuid)
+        except Exception:
+            logger.exception('HEARTBEAT HANDLER EXCEPTION: uuid=%s', payload.heartbeat_uuid)
+            raise
 
 
 def is_heartbeat_enabled() -> bool:

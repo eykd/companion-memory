@@ -59,6 +59,44 @@ class JobDispatcher:
         """
         return self._handlers.copy()
 
+    def _log_heartbeat_dispatch_start(self, job: ScheduledJob) -> None:
+        """Log heartbeat job dispatch start information."""
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        if job.job_type == 'heartbeat_event':
+            logger.info(
+                'DISPATCHER START: job_type=%s, job_id=%s, payload=%s',
+                job.job_type,
+                job.job_id,
+                job.payload,
+            )
+            logger.info('DISPATCHER HANDLERS: %s', list(self._handlers.keys()))
+
+    def _validate_and_log_payload(self, job: ScheduledJob, handler_class: type[BaseJobHandler]) -> BaseModel:
+        """Validate job payload and log heartbeat job details."""
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        if job.job_type == 'heartbeat_event':
+            logger.info('DISPATCHER FOUND HANDLER: %s', handler_class)
+
+        try:
+            payload_model = handler_class.payload_model()
+            if job.job_type == 'heartbeat_event':
+                logger.info('DISPATCHER PAYLOAD MODEL: %s', payload_model)
+            validated_payload = payload_model.model_validate(job.payload)
+            if job.job_type == 'heartbeat_event':
+                logger.info('DISPATCHER PAYLOAD VALIDATED: %s', validated_payload)
+        except ValidationError as e:
+            if job.job_type == 'heartbeat_event':
+                logger.exception('DISPATCHER VALIDATION ERROR for heartbeat_event')
+            raise ValueError('Payload validation failed for job type', job.job_type) from e
+        else:
+            return validated_payload
+
     def dispatch(self, job: ScheduledJob) -> BaseJobHandler:
         """Dispatch a job to its appropriate handler.
 
@@ -72,22 +110,30 @@ class JobDispatcher:
             ValueError: If no handler is registered for the job type or payload validation fails
 
         """
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        self._log_heartbeat_dispatch_start(job)
+
         # Check if handler is registered
         if job.job_type not in self._handlers:
+            if job.job_type == 'heartbeat_event':
+                logger.error('DISPATCHER ERROR: No handler for heartbeat_event')
             raise ValueError('No handler registered for job type', job.job_type)
 
         handler_class = self._handlers[job.job_type]
-
-        # Validate payload using handler's model
-        try:
-            payload_model = handler_class.payload_model()
-            validated_payload = payload_model.model_validate(job.payload)
-        except ValidationError as e:
-            raise ValueError('Payload validation failed for job type', job.job_type) from e
+        validated_payload = self._validate_and_log_payload(job, handler_class)
 
         # Create handler instance and process job
         handler_instance = handler_class()
+        if job.job_type == 'heartbeat_event':
+            logger.info('DISPATCHER CALLING HANDLER: %s', handler_instance)
+
         handler_instance.handle(validated_payload)
+
+        if job.job_type == 'heartbeat_event':
+            logger.info('DISPATCHER SUCCESS: handler completed')
 
         return handler_instance
 
