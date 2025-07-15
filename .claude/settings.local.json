@@ -18,7 +18,8 @@
       "Bash(timeout:*)",
       "Bash(git reset:*)",
       "Bash(ENABLE_HEARTBEAT= ./scripts/runtests.sh tests/test_scheduler.py::test_distributed_scheduler_remove_active_jobs -v)",
-      "WebFetch(domain:flask.palletsprojects.com)"
+      "WebFetch(domain:flask.palletsprojects.com)",
+      "Bash(python:*)"
     ],
     "deny": []
   }
