@@ -75,6 +75,18 @@ class JobTable:
         if job.completed_at is not None:
             item['completed_at'] = job.completed_at.isoformat()
 
+        # Debug logging for heartbeat jobs
+        import logging
+
+        logger = logging.getLogger(__name__)
+        if job.job_type == 'heartbeat_event':
+            logger.info(
+                'DEBUG: Storing heartbeat job - SK=%s, status=%s, scheduled_for=%s',
+                item['SK'],
+                item['status'],
+                item['scheduled_for'],
+            )
+
         self._table.put_item(Item=item)
 
     def get_job_by_id(self, job_id: UUID, scheduled_for: datetime) -> ScheduledJob | None:
@@ -125,7 +137,21 @@ class JobTable:
         import logging
 
         logger = logging.getLogger(__name__)
+        logger.info('DEBUG: Querying with now=%s, query_sk=%s', now.isoformat(), repr(query_sk))
         logger.info('DynamoDB query for jobs <= %s returned %d items', query_sk, len(response.get('Items', [])))
+
+        # Additional debug logging for heartbeat jobs
+        if len(response.get('Items', [])) == 0:
+            # Query all jobs to see what's actually in the table
+            all_jobs_response = self._table.query(KeyConditionExpression=Key('PK').eq('job'), Limit=10)
+            logger.info('DEBUG: Found %d total job items in table', len(all_jobs_response.get('Items', [])))
+            for item in all_jobs_response.get('Items', []):
+                logger.info(
+                    'DEBUG: Job SK=%s, status=%s, job_type=%s',
+                    item.get('SK', 'unknown'),
+                    item.get('status', 'unknown'),
+                    item.get('job_type', 'unknown'),
+                )
 
         jobs = []
         for item in response.get('Items', []):
