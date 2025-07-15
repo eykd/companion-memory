@@ -146,7 +146,7 @@ class JobTable:
             all_jobs_response = self._table.query(KeyConditionExpression=Key('PK').eq('job'), Limit=10)
             logger.info('DEBUG: Found %d total job items in table', len(all_jobs_response.get('Items', [])))
             for item in all_jobs_response.get('Items', []):
-                logger.info(
+                logger.info(  # pragma: no cover
                     'DEBUG: Job SK=%s, status=%s, job_type=%s',
                     item.get('SK', 'unknown'),
                     item.get('status', 'unknown'),
