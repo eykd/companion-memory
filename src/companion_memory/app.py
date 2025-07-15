@@ -7,10 +7,12 @@ from urllib.parse import parse_qs
 
 from flask import Flask, request
 
+from companion_memory.job_models import ScheduledJob
+from companion_memory.job_table import JobTable
 from companion_memory.scheduler import get_scheduler
 from companion_memory.slack_auth import validate_slack_signature
 from companion_memory.storage import LogStore, MemoryLogStore
-from companion_memory.summarizer import LLMClient, summarize_today, summarize_week, summarize_yesterday
+from companion_memory.summarizer import LLMClient
 
 
 def get_log_store() -> LogStore:
@@ -21,6 +23,53 @@ def get_log_store() -> LogStore:
 
     """
     return MemoryLogStore()
+
+
+def schedule_summary_job(user_id: str, summary_range: str) -> None:
+    """Schedule a summary generation job.
+
+    Args:
+        user_id: User ID to generate summary for
+        summary_range: Summary range ('today', 'yesterday', 'lastweek')
+
+    """
+    from companion_memory.deduplication import DeduplicationIndex
+    from companion_memory.job_models import make_job_sk
+
+    # Create job table and deduplication index
+    job_table = JobTable()
+    dedup_index = DeduplicationIndex()
+
+    # Create summary generation job
+    job_id = uuid.uuid4()
+    scheduled_for = datetime.now(UTC)
+
+    job = ScheduledJob(
+        job_id=job_id,
+        job_type='generate_summary',
+        payload={
+            'user_id': user_id,
+            'summary_range': summary_range,
+        },
+        scheduled_for=scheduled_for,
+        status='pending',
+        created_at=datetime.now(UTC),
+    )
+
+    # Create DynamoDB keys for deduplication
+    job_pk = 'job'
+    job_sk = make_job_sk(scheduled_for, job_id)
+
+    # Create logical job ID for deduplication
+    logical_id = f'summary:{summary_range}:{user_id}'
+    date = scheduled_for.strftime('%Y-%m-%d')
+
+    # Try to reserve the job (skip if already exists)
+    if not dedup_index.try_reserve(logical_id, date, job_pk, job_sk):
+        return  # Job already exists, skip
+
+    # Schedule the job
+    job_table.put_job(job)
 
 
 def create_app(
@@ -159,7 +208,7 @@ def create_app(
         """Handle Slack /lastweek command.
 
         Returns:
-            Response tuple with summary message and status code
+            Response tuple with empty message and 204 status code
 
         """
         # Get signature validation headers
@@ -176,20 +225,17 @@ def create_app(
         # Extract user ID
         user_id = request_data.get('user_id', [''])[0]
 
-        # Generate weekly summary
-        if llm is None:
-            return 'LLM not configured', 500
+        # Schedule summary job
+        schedule_summary_job(user_id, 'lastweek')
 
-        summary = summarize_week(user_id=user_id, log_store=log_store, llm=llm)
-
-        return summary, 200
+        return '', 204
 
     @app.route('/slack/yesterday', methods=['POST'])
     def yesterday_summary() -> tuple[str, int]:
         """Handle Slack /yesterday command.
 
         Returns:
-            Response tuple with summary message and status code
+            Response tuple with empty message and 204 status code
 
         """
         # Get signature validation headers
@@ -206,20 +252,17 @@ def create_app(
         # Extract user ID
         user_id = request_data.get('user_id', [''])[0]
 
-        # Generate yesterday summary
-        if llm is None:
-            return 'LLM not configured', 500
+        # Schedule summary job
+        schedule_summary_job(user_id, 'yesterday')
 
-        summary = summarize_yesterday(user_id=user_id, log_store=log_store, llm=llm)
-
-        return summary, 200
+        return '', 204
 
     @app.route('/slack/today', methods=['POST'])
     def today_summary() -> tuple[str, int]:
         """Handle Slack /today command.
 
         Returns:
-            Response tuple with summary message and status code
+            Response tuple with empty message and 204 status code
 
         """
         # Get signature validation headers
@@ -236,12 +279,9 @@ def create_app(
         # Extract user ID
         user_id = request_data.get('user_id', [''])[0]
 
-        # Generate today summary
-        if llm is None:
-            return 'LLM not configured', 500
+        # Schedule summary job
+        schedule_summary_job(user_id, 'today')
 
-        summary = summarize_today(user_id=user_id, log_store=log_store, llm=llm)
-
-        return summary, 200
+        return '', 204
 
     return app

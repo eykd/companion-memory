@@ -59,3 +59,31 @@ def test_send_slack_message_sends_text() -> None:
 
         # Assert Slack client was called correctly
         mock_client.chat_postMessage.assert_called_once_with(channel='U123456789', text='Test summary message')
+
+
+def test_summary_today_endpoint_enqueues_job() -> None:
+    """Test that /slack/today endpoint enqueues a job and returns 204."""
+    from companion_memory.app import create_app
+
+    # Create test app with mocked dependencies
+    with patch('companion_memory.app.get_log_store') as mock_get_log_store:
+        mock_log_store = MagicMock()
+        mock_get_log_store.return_value = mock_log_store
+
+        with patch('companion_memory.app.schedule_summary_job') as mock_schedule_job:
+            app = create_app(enable_scheduler=False)
+            app.config['TESTING'] = True
+
+            with (
+                app.test_client() as client,
+                patch('companion_memory.app.validate_slack_signature', return_value=True),
+            ):
+                # Make request to endpoint
+                response = client.post('/slack/today', data={'text': '', 'user_id': 'U123456789'})
+
+                # Assert response is 204 No Content
+                assert response.status_code == 204
+                assert response.data == b''
+
+                # Assert job was scheduled
+                mock_schedule_job.assert_called_once_with('U123456789', 'today')
