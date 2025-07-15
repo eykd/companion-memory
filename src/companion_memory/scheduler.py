@@ -19,6 +19,9 @@ from companion_memory.user_sync import sync_user_timezone
 
 logger = logging.getLogger(__name__)
 
+# Configure APScheduler logging to reduce verbosity
+logging.getLogger('apscheduler.executors.default').setLevel(logging.WARNING)
+
 
 class SchedulerLock:
     """DynamoDB-based distributed lock for scheduler coordination."""
