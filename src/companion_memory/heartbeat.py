@@ -3,8 +3,43 @@
 import logging
 import os
 import uuid
+from datetime import UTC, datetime, timedelta
+
+from pydantic import BaseModel, Field
+
+from companion_memory.job_dispatcher import BaseJobHandler, register_handler
 
 logger = logging.getLogger(__name__)
+
+
+class HeartbeatEventPayload(BaseModel):
+    """Payload model for heartbeat event jobs."""
+
+    heartbeat_uuid: str = Field(description='UUID to log in heartbeat event message')
+
+
+@register_handler('heartbeat_event')
+class HeartbeatEventHandler(BaseJobHandler):
+    """Handler for heartbeat event jobs."""
+
+    @classmethod
+    def payload_model(cls) -> type[BaseModel]:
+        """Return the payload model for this handler."""
+        return HeartbeatEventPayload
+
+    def handle(self, payload: BaseModel) -> None:
+        """Process a heartbeat event job.
+
+        Args:
+            payload: Validated payload containing heartbeat_uuid
+
+        """
+        if not isinstance(payload, HeartbeatEventPayload):
+            msg = f'Expected HeartbeatEventPayload, got {type(payload)}'
+            raise TypeError(msg)
+
+        # Execute the heartbeat event logging
+        run_heartbeat_event_job(payload.heartbeat_uuid)
 
 
 def is_heartbeat_enabled() -> bool:
@@ -59,4 +94,24 @@ def schedule_event_heartbeat_job(heartbeat_uuid: str) -> None:
         heartbeat_uuid: The UUID to pass to the event job for logging.
 
     """
-    # TODO: Implement in later steps
+    from companion_memory.job_models import ScheduledJob
+    from companion_memory.job_table import JobTable
+
+    # Calculate when to run (10 seconds from now)
+    now_utc = datetime.now(UTC)
+    scheduled_time = now_utc + timedelta(seconds=10)
+
+    # Create the job
+    job = ScheduledJob(
+        job_id=uuid.uuid4(),
+        job_type='heartbeat_event',
+        payload={'heartbeat_uuid': heartbeat_uuid},
+        scheduled_for=scheduled_time,
+        status='pending',
+        attempts=0,
+        created_at=now_utc,
+    )
+
+    # Store the job in DynamoDB
+    job_table = JobTable()
+    job_table.put_job(job)
