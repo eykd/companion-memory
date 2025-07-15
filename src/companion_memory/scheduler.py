@@ -248,6 +248,12 @@ class DistributedScheduler:
         # Schedule heartbeat logger
         self.scheduler.add_job(self._heartbeat_logger, 'interval', seconds=60, id='heartbeat_logger', max_instances=1)
 
+        # Schedule diagnostic heartbeat feature if enabled
+        from companion_memory.heartbeat import is_heartbeat_enabled, schedule_heartbeat_job
+
+        if is_heartbeat_enabled():
+            self.scheduler.add_job(schedule_heartbeat_job, 'cron', minute='*', id='heartbeat_cron', max_instances=1)
+
         # Schedule user time zone sync every 6 hours
         self.scheduler.add_job(sync_user_timezone, 'interval', hours=6, id='user_timezone_sync', max_instances=1)
 
@@ -282,6 +288,10 @@ class DistributedScheduler:
         # Remove heartbeat logger
         with contextlib.suppress(Exception):
             self.scheduler.remove_job('heartbeat_logger')
+
+        # Remove heartbeat cron job
+        with contextlib.suppress(Exception):
+            self.scheduler.remove_job('heartbeat_cron')
 
         # Remove daily summary scheduler
         with contextlib.suppress(Exception):
