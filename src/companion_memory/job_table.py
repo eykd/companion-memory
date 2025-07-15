@@ -213,12 +213,9 @@ class JobTable:
 
         Returns:
             List of ScheduledJob instances with the given job_id
+
         """
         response = self._table.query(
             KeyConditionExpression=Key('PK').eq('job'),
         )
-        jobs = []
-        for item in response.get('Items', []):
-            if item.get('job_id') == str(job_id):
-                jobs.append(self._item_to_job(item))
-        return jobs
+        return [self._item_to_job(item) for item in response.get('Items', []) if item.get('job_id') == str(job_id)]
