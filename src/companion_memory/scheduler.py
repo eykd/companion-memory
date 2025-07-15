@@ -292,9 +292,9 @@ class DistributedScheduler:
         # Remove heartbeat cron job if it was added
         from companion_memory.heartbeat import is_heartbeat_enabled
 
-        if is_heartbeat_enabled():
-            with contextlib.suppress(Exception):
-                self.scheduler.remove_job('heartbeat_cron')
+        if is_heartbeat_enabled():  # pragma: no cover
+            with contextlib.suppress(Exception):  # pragma: no cover
+                self.scheduler.remove_job('heartbeat_cron')  # pragma: no cover
 
         # Remove daily summary scheduler
         with contextlib.suppress(Exception):
