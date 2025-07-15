@@ -10,6 +10,36 @@ from companion_memory.storage import LogStore
 from companion_memory.summarizer import summarize_today, summarize_week, summarize_yesterday
 
 
+def get_summary(user_id: str, summary_range: str, log_store: LogStore, llm: LLMLClient) -> str:
+    """Get summary for user and time range.
+
+    Args:
+        user_id: User ID to generate summary for
+        summary_range: Summary range ('today', 'yesterday', 'lastweek')
+        log_store: Log store for retrieving user data
+        llm: LLM client for generating summaries
+
+    Returns:
+        Generated summary text
+
+    Raises:
+        ValueError: If summary_range is not supported
+
+    """
+    # Validate range early
+    if summary_range not in ('today', 'yesterday', 'lastweek'):
+        error_msg = f'Unknown range: {summary_range}'
+        raise ValueError(error_msg)
+
+    # Generate summary based on range
+    if summary_range == 'today':
+        return summarize_today(user_id=user_id, log_store=log_store, llm=llm)
+    if summary_range == 'yesterday':
+        return summarize_yesterday(user_id=user_id, log_store=log_store, llm=llm)
+    # lastweek
+    return summarize_week(user_id=user_id, log_store=log_store, llm=llm)
+
+
 def generate_summary_job(
     user_id: str,
     summary_range: str,
@@ -27,16 +57,8 @@ def generate_summary_job(
         llm: LLM client for generating summaries
 
     """
-    # Generate summary based on range
-    if summary_range == 'today':
-        summary = summarize_today(user_id=user_id, log_store=log_store, llm=llm)
-    elif summary_range == 'yesterday':
-        summary = summarize_yesterday(user_id=user_id, log_store=log_store, llm=llm)
-    elif summary_range == 'lastweek':
-        summary = summarize_week(user_id=user_id, log_store=log_store, llm=llm)
-    else:
-        error_msg = f'Unknown range: {summary_range}'
-        raise ValueError(error_msg)
+    # Generate summary using helper
+    summary = get_summary(user_id, summary_range, log_store, llm)
 
     # Generate UUID for tracing
     job_uuid = str(uuid.uuid1())
