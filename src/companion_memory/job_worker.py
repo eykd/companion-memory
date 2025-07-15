@@ -202,7 +202,7 @@ class JobWorker:
                 lock_expires_at=None,
             )
 
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             # Handle job failure with retry policy
             logger.exception('Job %s failed during processing', job.job_id)
             self._handle_job_failure(job, e, now)

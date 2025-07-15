@@ -838,6 +838,36 @@ def test_distributed_scheduler_poll_and_process_jobs_debug_logging_with_due_jobs
         )
 
 
+def test_distributed_scheduler_poll_and_process_jobs_no_due_jobs_found() -> None:
+    """Test _poll_and_process_jobs debug logging when no due jobs are found."""
+    with (
+        patch('boto3.resource'),
+        patch('companion_memory.job_table.JobTable') as mock_job_table_class,
+        patch('companion_memory.job_worker.JobWorker') as mock_job_worker_class,
+        patch('companion_memory.scheduler.logger') as mock_logger,
+    ):
+        # Mock job table with no due jobs
+        mock_job_table = MagicMock()
+        mock_job_table.get_due_jobs.return_value = []  # No jobs found
+        mock_job_table_class.return_value = mock_job_table
+
+        # Mock job worker that processes 0 jobs
+        mock_job_worker = MagicMock()
+        mock_job_worker.poll_and_process_jobs.return_value = 0  # No jobs processed
+        mock_job_worker_class.return_value = mock_job_worker
+
+        scheduler = DistributedScheduler('TestTable')
+        scheduler.lock.lock_acquired = True
+
+        # Call the method
+        scheduler._poll_and_process_jobs()  # noqa: SLF001
+
+        # Verify the specific logging for no due jobs found (line 368)
+        mock_logger.info.assert_any_call('Job worker polling started')
+        mock_logger.info.assert_any_call('Job worker found %d due jobs during polling', 0)
+        mock_logger.info.assert_any_call('No due jobs found - checking recent heartbeat job creation')
+
+
 def test_distributed_scheduler_poll_and_process_jobs_exception() -> None:
     """Test _poll_and_process_jobs when an exception occurs."""
     with (

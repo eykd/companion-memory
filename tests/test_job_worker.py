@@ -345,3 +345,40 @@ def test_worker_job_exceeds_max_attempts_goes_to_dead_letter() -> None:
     dead_letter_jobs = [j for j in jobs if j.status == 'dead_letter']
     assert len(dead_letter_jobs) == 1
     assert dead_letter_jobs[0].job_id == job.job_id
+
+
+@mock_aws
+def test_worker_skips_locked_job_with_logging() -> None:
+    """Test that worker skips locked jobs and logs the reason."""
+    job_table = JobTable()
+    job_table.create_table_for_testing()
+
+    worker = JobWorker(job_table)
+    worker.register_handler('test_job', TestJobHandler)
+
+    now = datetime.now(UTC)
+
+    # Create a job that's pending but locked in the future
+    locked_job = ScheduledJob(
+        job_id=uuid4(),
+        job_type='test_job',
+        payload={'message': 'locked'},
+        scheduled_for=now - timedelta(minutes=1),  # Due to run
+        status='pending',
+        locked_by='other-worker',
+        lock_expires_at=now + timedelta(minutes=10),  # Locked until future
+        attempts=0,
+        created_at=now,
+    )
+
+    job_table.put_job(locked_job)
+
+    # Worker should skip the locked job
+    processed = worker.poll_and_process_jobs(now)
+    assert processed == 0
+
+    # Job should still be pending and locked
+    jobs = job_table.get_due_jobs(now + timedelta(minutes=1))
+    assert len(jobs) == 1
+    assert jobs[0].status == 'pending'
+    assert jobs[0].locked_by == 'other-worker'
