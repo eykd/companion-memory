@@ -87,3 +87,54 @@ def test_summary_today_endpoint_enqueues_job() -> None:
 
                 # Assert job was scheduled
                 mock_schedule_job.assert_called_once_with('U123456789', 'today')
+
+
+def test_get_summary_invalid_range_raises_error() -> None:
+    """Test that get_summary raises ValueError for invalid range."""
+    from companion_memory.summary_jobs import get_summary
+
+    # Mock dependencies
+    mock_log_store = MagicMock()
+    mock_llm = MagicMock()
+
+    # Test with invalid range
+    with pytest.raises(ValueError, match='Unknown range: invalid'):
+        get_summary('user123', 'invalid', mock_log_store, mock_llm)
+
+
+def test_get_summary_yesterday_range() -> None:
+    """Test that get_summary calls summarize_yesterday for yesterday range."""
+    from companion_memory.summary_jobs import get_summary
+
+    # Mock dependencies
+    mock_log_store = MagicMock()
+    mock_llm = MagicMock()
+
+    # Mock summary generation
+    expected_summary = 'Yesterday summary for user123'
+    with patch('companion_memory.summary_jobs.summarize_yesterday', return_value=expected_summary) as mock_summarize:
+        # Call the function we're testing
+        result = get_summary('user123', 'yesterday', mock_log_store, mock_llm)
+
+        # Assert correct function was called
+        mock_summarize.assert_called_once_with(user_id='user123', log_store=mock_log_store, llm=mock_llm)
+        assert result == expected_summary
+
+
+def test_get_summary_lastweek_range() -> None:
+    """Test that get_summary calls summarize_week for lastweek range."""
+    from companion_memory.summary_jobs import get_summary
+
+    # Mock dependencies
+    mock_log_store = MagicMock()
+    mock_llm = MagicMock()
+
+    # Mock summary generation
+    expected_summary = 'Week summary for user123'
+    with patch('companion_memory.summary_jobs.summarize_week', return_value=expected_summary) as mock_summarize:
+        # Call the function we're testing
+        result = get_summary('user123', 'lastweek', mock_log_store, mock_llm)
+
+        # Assert correct function was called
+        mock_summarize.assert_called_once_with(user_id='user123', log_store=mock_log_store, llm=mock_llm)
+        assert result == expected_summary
