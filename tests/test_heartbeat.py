@@ -3,6 +3,8 @@
 import os
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 
 def test_is_heartbeat_enabled_returns_true_when_env_var_set() -> None:
     """Test that is_heartbeat_enabled() returns True when ENABLE_HEARTBEAT=1."""
@@ -107,3 +109,88 @@ def test_run_heartbeat_event_job_logs_with_uuid() -> None:
 
         # Verify logging
         mock_logger.info.assert_called_once_with('Heartbeat (event): UUID=%s', test_uuid)
+
+
+def test_schedule_heartbeat_job_calls_run_heartbeat_timed_job() -> None:
+    """Test that schedule_heartbeat_job delegates to run_heartbeat_timed_job."""
+    from companion_memory.heartbeat import schedule_heartbeat_job
+
+    with patch('companion_memory.heartbeat.run_heartbeat_timed_job') as mock_run_timed:
+        schedule_heartbeat_job()
+        mock_run_timed.assert_called_once()
+
+
+def test_schedule_event_heartbeat_job_creates_delayed_job() -> None:
+    """Test that schedule_event_heartbeat_job creates a job with 10-second delay."""
+    from datetime import UTC, datetime, timedelta
+
+    from companion_memory.heartbeat import schedule_event_heartbeat_job
+
+    test_uuid = '01D3B4F8-1F35-11EF-AC22-7B4E4C2AD94E'
+    test_now = datetime(2023, 7, 15, 12, 0, 0, tzinfo=UTC)
+    test_job_id = '12345678-1234-5678-9012-123456789012'
+
+    with (
+        patch('companion_memory.heartbeat.datetime') as mock_datetime,
+        patch('companion_memory.heartbeat.uuid') as mock_uuid_module,
+        patch('companion_memory.job_table.JobTable') as mock_job_table_class,
+    ):
+        # Mock datetime
+        mock_datetime.now.return_value = test_now
+
+        # Mock UUID generation
+        mock_uuid_module.uuid4.return_value = test_job_id
+
+        # Mock job table
+        mock_job_table = MagicMock()
+        mock_job_table_class.return_value = mock_job_table
+
+        # Call the function
+        schedule_event_heartbeat_job(test_uuid)
+
+        # Verify job table creation and job storage
+        mock_job_table_class.assert_called_once()
+        mock_job_table.put_job.assert_called_once()
+
+        # Verify the job details
+        job_call = mock_job_table.put_job.call_args[0][0]
+        assert str(job_call.job_id) == test_job_id
+        assert job_call.job_type == 'heartbeat_event'
+        assert job_call.payload == {'heartbeat_uuid': test_uuid}
+        assert job_call.scheduled_for == test_now + timedelta(seconds=10)
+        assert job_call.status == 'pending'
+        assert job_call.attempts == 0
+        assert job_call.created_at == test_now
+
+
+def test_heartbeat_event_handler_payload_model() -> None:
+    """Test that HeartbeatEventHandler returns correct payload model."""
+    from companion_memory.heartbeat import HeartbeatEventHandler, HeartbeatEventPayload
+
+    handler = HeartbeatEventHandler()
+    assert handler.payload_model() == HeartbeatEventPayload
+
+
+def test_heartbeat_event_handler_with_valid_payload() -> None:
+    """Test HeartbeatEventHandler.handle with valid payload."""
+    from companion_memory.heartbeat import HeartbeatEventHandler, HeartbeatEventPayload
+
+    test_uuid = '01D3B4F8-1F35-11EF-AC22-7B4E4C2AD94E'
+    payload = HeartbeatEventPayload(heartbeat_uuid=test_uuid)
+
+    with patch('companion_memory.heartbeat.run_heartbeat_event_job') as mock_run_event:
+        handler = HeartbeatEventHandler()
+        handler.handle(payload)
+
+        mock_run_event.assert_called_once_with(test_uuid)
+
+
+def test_heartbeat_event_handler_with_invalid_payload() -> None:
+    """Test HeartbeatEventHandler.handle with invalid payload raises TypeError."""
+    from companion_memory.heartbeat import HeartbeatEventHandler
+
+    handler = HeartbeatEventHandler()
+    invalid_payload = MagicMock()  # Not a HeartbeatEventPayload
+
+    with pytest.raises(TypeError, match='Expected HeartbeatEventPayload'):
+        handler.handle(invalid_payload)
