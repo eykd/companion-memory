@@ -326,6 +326,8 @@ class DistributedScheduler:
         if not self.lock.lock_acquired:
             return
 
+        logger.info('Job worker polling started')
+
         try:
             # Lazy initialize job worker to avoid circular imports
             if self._job_worker is None:  # pragma: no branch

@@ -740,6 +740,8 @@ def test_distributed_scheduler_poll_and_process_jobs_with_lock() -> None:
 
 def test_distributed_scheduler_poll_and_process_jobs_no_jobs_processed() -> None:
     """Test _poll_and_process_jobs when no jobs are processed."""
+    from unittest.mock import call
+
     with (
         patch('boto3.resource'),
         patch('companion_memory.job_table.JobTable') as mock_job_table_class,
@@ -759,8 +761,13 @@ def test_distributed_scheduler_poll_and_process_jobs_no_jobs_processed() -> None
         # Call the method
         scheduler._poll_and_process_jobs()  # noqa: SLF001
 
-        # Should not log processed count when 0
-        mock_logger.info.assert_called_once_with('Job worker initialized for scheduler integration')
+        # Should log polling started, job worker initialized, and job count
+        expected_calls = [
+            call('Job worker polling started'),
+            call('Job worker initialized for scheduler integration'),
+            call('Job worker found %d due jobs during polling', 0),
+        ]
+        mock_logger.info.assert_has_calls(expected_calls)
 
 
 def test_distributed_scheduler_poll_and_process_jobs_debug_logging_with_due_jobs() -> None:
@@ -813,6 +820,7 @@ def test_distributed_scheduler_poll_and_process_jobs_debug_logging_with_due_jobs
         scheduler._poll_and_process_jobs()  # noqa: SLF001
 
         # Verify info logging was called
+        mock_logger.info.assert_any_call('Job worker polling started')
         mock_logger.info.assert_any_call('Job worker found %d due jobs during polling', 2)
         mock_logger.info.assert_any_call(
             'Due job: %s, type=%s, status=%s, scheduled_for=%s',
