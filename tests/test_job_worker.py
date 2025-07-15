@@ -281,3 +281,66 @@ def test_worker_handles_job_claim_failure() -> None:
         processed = worker.poll_and_process_jobs(now)
         # Should process 0 jobs due to claim failure (covers lines 145-147, 103)
         assert processed == 0
+
+
+def test_worker_register_all_handlers_from_global() -> None:
+    """Test that worker can register all handlers from global dispatcher."""
+    job_table = JobTable()
+    worker = JobWorker(job_table)
+
+    # Initially, worker should have no handlers
+    assert len(worker.get_registered_handlers()) == 0
+
+    # Register all handlers from global dispatcher
+    worker.register_all_handlers_from_global()
+
+    # Now worker should have handlers
+    registered_handlers = worker.get_registered_handlers()
+
+    # Should have heartbeat_event and work_sampling_prompt handlers
+    assert 'heartbeat_event' in registered_handlers
+    assert 'work_sampling_prompt' in registered_handlers
+
+
+@mock_aws
+def test_worker_job_exceeds_max_attempts_goes_to_dead_letter() -> None:
+    """Test that job with max attempts goes to dead letter status."""
+    job_table = JobTable()
+    job_table.create_table_for_testing()
+
+    # Create worker with max_attempts=1 for faster testing
+    worker = JobWorker(job_table, max_attempts=1)
+
+    # Register a handler that always fails
+    class FailingHandler(BaseJobHandler):
+        @classmethod
+        def payload_model(cls) -> type[BaseModel]:
+            return TestJobPayload
+
+        def handle(self, payload: BaseModel) -> None:
+            raise ValueError('Always fails')
+
+    worker.register_handler('failing_job', FailingHandler)
+
+    now = datetime.now(UTC)
+    job = ScheduledJob(
+        job_id=uuid4(),
+        job_type='failing_job',
+        payload={'message': 'test'},
+        scheduled_for=now - timedelta(minutes=1),
+        status='pending',
+        attempts=1,  # Already at max attempts
+        created_at=now,
+    )
+
+    job_table.put_job(job)
+
+    # Process the job - should go to dead letter
+    processed = worker.poll_and_process_jobs(now)
+    assert processed == 1
+
+    # Job should be marked as dead_letter
+    jobs = job_table.get_due_jobs(now + timedelta(hours=1), limit=10)
+    dead_letter_jobs = [j for j in jobs if j.status == 'dead_letter']
+    assert len(dead_letter_jobs) == 1
+    assert dead_letter_jobs[0].job_id == job.job_id

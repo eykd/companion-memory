@@ -64,6 +64,15 @@ class JobWorker:
 
         register_all_handlers(self._dispatcher)
 
+    def get_registered_handlers(self) -> dict[str, type[BaseJobHandler]]:
+        """Get all registered handlers from this worker's dispatcher.
+
+        Returns:
+            Dictionary mapping job types to handler classes
+
+        """
+        return self._dispatcher.get_registered_handlers()
+
     def poll_and_process_jobs(self, now: datetime | None = None) -> int:
         """Poll for due jobs and process them.
 
