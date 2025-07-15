@@ -50,6 +50,15 @@ class JobDispatcher:
         """
         self._handlers[job_type] = handler_class
 
+    def get_registered_handlers(self) -> dict[str, type[BaseJobHandler]]:
+        """Get all registered handlers.
+
+        Returns:
+            Dictionary mapping job types to handler classes
+
+        """
+        return self._handlers.copy()
+
     def dispatch(self, job: ScheduledJob) -> BaseJobHandler:
         """Dispatch a job to its appropriate handler.
 
@@ -85,6 +94,18 @@ class JobDispatcher:
 
 # Global dispatcher instance for use with decorator
 global_dispatcher = JobDispatcher()
+
+
+def register_all_handlers(dispatcher: JobDispatcher) -> None:
+    """Register all handlers from the global dispatcher with the given dispatcher.
+
+    Args:
+        dispatcher: The dispatcher to register handlers with
+
+    """
+    # Copy all handlers from global dispatcher
+    for job_type, handler_class in global_dispatcher.get_registered_handlers().items():
+        dispatcher.register(job_type, handler_class)
 
 
 def register_handler(job_type: str) -> Callable[[type[BaseJobHandler]], type[BaseJobHandler]]:

@@ -335,7 +335,8 @@ class DistributedScheduler:
                 job_table = JobTable()
                 self._job_worker = JobWorker(job_table)
 
-                # TODO: Register job handlers here
+                # Register all handlers with the job worker
+                self._job_worker.register_all_handlers_from_global()
 
                 logger.info('Job worker initialized for scheduler integration')
 

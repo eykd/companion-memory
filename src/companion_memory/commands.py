@@ -129,7 +129,8 @@ def run_job_worker(  # pragma: no cover
         max_attempts=max_attempts,
     )
 
-    # TODO: Register job handlers here
+    # Register all handlers with the job worker
+    worker.register_all_handlers_from_global()  # pragma: no cover
 
     click.echo('Job worker started. Press Ctrl+C to stop.')  # pragma: no cover
     logger.info(  # pragma: no cover
