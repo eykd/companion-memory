@@ -812,16 +812,16 @@ def test_distributed_scheduler_poll_and_process_jobs_debug_logging_with_due_jobs
         # Call the method
         scheduler._poll_and_process_jobs()  # noqa: SLF001
 
-        # Verify debug logging was called
-        mock_logger.debug.assert_any_call('Job worker found %d due jobs during polling', 2)
-        mock_logger.debug.assert_any_call(
+        # Verify info logging was called
+        mock_logger.info.assert_any_call('Job worker found %d due jobs during polling', 2)
+        mock_logger.info.assert_any_call(
             'Due job: %s, type=%s, status=%s, scheduled_for=%s',
             due_job1.job_id,
             due_job1.job_type,
             due_job1.status,
             due_job1.scheduled_for,
         )
-        mock_logger.debug.assert_any_call(
+        mock_logger.info.assert_any_call(
             'Due job: %s, type=%s, status=%s, scheduled_for=%s',
             due_job2.job_id,
             due_job2.job_type,

@@ -352,10 +352,10 @@ class DistributedScheduler:
 
                 job_table = JobTable()
                 due_jobs = job_table.get_due_jobs(datetime.now(UTC), limit=5)
-                logger.debug('Job worker found %d due jobs during polling', len(due_jobs))
+                logger.info('Job worker found %d due jobs during polling', len(due_jobs))
                 if due_jobs:  # pragma: no cover
                     for job in due_jobs:
-                        logger.debug(
+                        logger.info(
                             'Due job: %s, type=%s, status=%s, scheduled_for=%s',
                             job.job_id,
                             job.job_type,
