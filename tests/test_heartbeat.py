@@ -91,3 +91,19 @@ def test_run_heartbeat_timed_job_generates_uuid_and_logs() -> None:
 
         # Verify event job scheduling
         mock_schedule_event.assert_called_once_with(test_uuid)
+
+
+def test_run_heartbeat_event_job_logs_with_uuid() -> None:
+    """Test that run_heartbeat_event_job logs correctly with provided UUID."""
+    from unittest.mock import patch
+
+    from companion_memory.heartbeat import run_heartbeat_event_job
+
+    test_uuid = '01D3B4F8-1F35-11EF-AC22-7B4E4C2AD94E'
+
+    with patch('companion_memory.heartbeat.logger') as mock_logger:
+        # Call the function
+        run_heartbeat_event_job(test_uuid)
+
+        # Verify logging
+        mock_logger.info.assert_called_once_with('Heartbeat (event): UUID=%s', test_uuid)

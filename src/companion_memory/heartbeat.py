@@ -41,6 +41,17 @@ def run_heartbeat_timed_job() -> None:
     schedule_event_heartbeat_job(str(heartbeat_uuid))
 
 
+def run_heartbeat_event_job(heartbeat_uuid: str) -> None:
+    """Execute the event-based heartbeat job logic.
+
+    Args:
+        heartbeat_uuid: The UUID to log in the heartbeat message.
+
+    """
+    # Log the event heartbeat with the provided UUID
+    logger.info('Heartbeat (event): UUID=%s', heartbeat_uuid)
+
+
 def schedule_event_heartbeat_job(heartbeat_uuid: str) -> None:
     """Schedule an event-based heartbeat job with 10-second delay.
 
