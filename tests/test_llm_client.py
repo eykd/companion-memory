@@ -8,6 +8,8 @@ import pytest
 from companion_memory.exceptions import LLMConfigurationError, LLMGenerationError
 from companion_memory.llm_client import LLMLClient
 
+pytestmark = pytest.mark.block_network
+
 
 @pytest.fixture
 def mock_llm_module() -> MagicMock:

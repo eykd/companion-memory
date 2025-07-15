@@ -3,6 +3,10 @@
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+import pytest
+
+pytestmark = pytest.mark.block_network
+
 
 def test_user_settings_store_interface() -> None:
     """Test that UserSettingsStore interface can be called."""

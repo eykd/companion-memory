@@ -3,6 +3,10 @@
 import os
 from unittest.mock import MagicMock, patch
 
+import pytest
+
+pytestmark = pytest.mark.block_network
+
 
 def test_test_slack_connection_success_with_default_user() -> None:
     """Test that test_slack_connection succeeds with default user from environment."""

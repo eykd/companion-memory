@@ -2,6 +2,10 @@
 
 from unittest.mock import MagicMock, patch
 
+import pytest
+
+pytestmark = pytest.mark.block_network
+
 
 def test_wsgi_creates_dynamo_log_store_and_llm_client_for_production() -> None:
     """Test that WSGI creates DynamoDB log store and LLM client for production deployment."""

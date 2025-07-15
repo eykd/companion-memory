@@ -8,6 +8,8 @@ import pytest
 
 from companion_memory.work_sampling_scheduler import schedule_work_sampling_jobs
 
+pytestmark = pytest.mark.block_network
+
 
 @pytest.fixture
 def mock_user_settings_store() -> MagicMock:

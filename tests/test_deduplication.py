@@ -9,6 +9,8 @@ from moto import mock_aws
 from companion_memory.deduplication import DeduplicationIndex
 from companion_memory.job_models import ScheduledJob, make_job_sk
 
+pytestmark = pytest.mark.block_network
+
 
 @mock_aws
 def test_deduplication_prevents_duplicate_scheduling() -> None:

@@ -3,10 +3,14 @@
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+import pytest
+
 if TYPE_CHECKING:  # pragma: no cover
     from companion_memory.storage import LogStore
 
 from companion_memory.storage import MemoryLogStore
+
+pytestmark = pytest.mark.block_network
 
 
 class TestLogStore:

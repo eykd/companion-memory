@@ -3,7 +3,11 @@
 from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from companion_memory.storage import DynamoLogStore
+
+pytestmark = pytest.mark.block_network
 
 
 def test_dynamo_log_store_write_log() -> None:

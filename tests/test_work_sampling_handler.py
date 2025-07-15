@@ -9,6 +9,8 @@ import pytest
 from companion_memory.job_models import ScheduledJob, WorkSamplingPayload
 from companion_memory.work_sampling_handler import PROMPT_VARIATIONS, WorkSamplingHandler
 
+pytestmark = pytest.mark.block_network
+
 
 def test_work_sampling_handler_payload_model() -> None:
     """Test that WorkSamplingHandler returns correct payload model."""

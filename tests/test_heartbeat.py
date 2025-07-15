@@ -5,6 +5,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+pytestmark = pytest.mark.block_network
+
 
 def test_is_heartbeat_enabled_returns_true_when_env_var_set() -> None:
     """Test that is_heartbeat_enabled() returns True when ENABLE_HEARTBEAT=1."""
@@ -62,7 +64,6 @@ def test_scheduler_registers_heartbeat_cron_job_when_enabled() -> None:
 
         # Verify it's a cron job that runs every minute
         call_args = heartbeat_calls[0]
-        # APScheduler.add_job(func, trigger, **trigger_args)
         assert call_args[0][1] == 'cron'  # Second positional arg should be 'cron'
         assert 'minute' in call_args[1]  # Should have minute in kwargs
 

@@ -11,6 +11,8 @@ from companion_memory.scheduler import (
     get_slack_client,
 )
 
+pytestmark = pytest.mark.block_network
+
 
 def test_scheduler_lock_key_format() -> None:
     """Test that scheduler lock uses correct table key format."""

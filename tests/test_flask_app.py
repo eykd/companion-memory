@@ -7,6 +7,8 @@ import pytest
 
 from companion_memory.app import create_app
 
+pytestmark = pytest.mark.block_network
+
 if TYPE_CHECKING:  # pragma: no cover
     from flask.testing import FlaskClient
 

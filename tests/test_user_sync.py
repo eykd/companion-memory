@@ -2,6 +2,10 @@
 
 from unittest.mock import MagicMock, patch
 
+import pytest
+
+pytestmark = pytest.mark.block_network
+
 
 def test_sync_user_timezone_no_user_id() -> None:
     """Test sync_user_timezone when SLACK_USER_ID is not set."""

@@ -9,6 +9,8 @@ from pydantic import BaseModel
 from companion_memory.job_dispatcher import BaseJobHandler, JobDispatcher, register_handler
 from companion_memory.job_models import ScheduledJob
 
+pytestmark = pytest.mark.block_network
+
 
 class DailySummaryPayload(BaseModel):
     """Payload for daily summary jobs."""

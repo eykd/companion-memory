@@ -3,7 +3,11 @@
 from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 
+import pytest
+
 from companion_memory.summarizer import send_summary_message, summarize_day, summarize_week
+
+pytestmark = pytest.mark.block_network
 
 
 def test_summarize_week_generates_summary_with_llm() -> None:

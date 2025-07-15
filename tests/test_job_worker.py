@@ -3,6 +3,7 @@
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
+import pytest
 from moto import mock_aws
 from pydantic import BaseModel
 
@@ -10,6 +11,8 @@ from companion_memory.job_dispatcher import BaseJobHandler
 from companion_memory.job_models import ScheduledJob
 from companion_memory.job_table import JobTable
 from companion_memory.job_worker import JobWorker
+
+pytestmark = pytest.mark.block_network
 
 
 class TestJobPayload(BaseModel):

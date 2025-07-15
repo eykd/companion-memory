@@ -4,6 +4,8 @@ import pytest
 
 from companion_memory.exceptions import CompanionMemoryError, LLMConfigurationError, LLMGenerationError
 
+pytestmark = pytest.mark.block_network
+
 
 def test_companion_memory_error_is_base_exception() -> None:
     """Test that CompanionMemoryError is the base exception class."""

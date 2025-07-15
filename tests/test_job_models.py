@@ -7,6 +7,8 @@ import pytest
 
 from companion_memory.job_models import ScheduledJob, WorkSamplingPayload, make_job_sk, parse_job_sk
 
+pytestmark = pytest.mark.block_network
+
 
 def test_job_model_serializes_correctly() -> None:
     """Test that ScheduledJob model serializes and validates correctly."""

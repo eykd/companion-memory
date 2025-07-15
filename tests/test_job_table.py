@@ -3,10 +3,13 @@
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
+import pytest
 from moto import mock_aws
 
 from companion_memory.job_models import ScheduledJob
 from companion_memory.job_table import JobTable
+
+pytestmark = pytest.mark.block_network
 
 
 @mock_aws

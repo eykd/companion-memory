@@ -1,8 +1,11 @@
 """Tests for CLI functionality."""
 
+import pytest
 from click.testing import CliRunner
 
 from companion_memory.cli import cli
+
+pytestmark = pytest.mark.block_network
 
 
 def test_cli_help_text() -> None:

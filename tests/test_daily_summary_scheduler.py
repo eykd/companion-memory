@@ -6,6 +6,8 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
+pytestmark = pytest.mark.block_network
+
 
 @pytest.fixture
 def mock_user_settings_store() -> MagicMock:

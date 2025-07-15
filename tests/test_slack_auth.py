@@ -4,7 +4,11 @@ import hashlib
 import hmac
 import os
 
+import pytest
+
 from companion_memory.slack_auth import validate_slack_signature
+
+pytestmark = pytest.mark.block_network
 
 
 def test_validate_slack_signature_with_valid_signature() -> None:
