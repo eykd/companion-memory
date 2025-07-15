@@ -1,13 +1,18 @@
 """Job handlers for summary generation and delivery."""
 
+import logging
 import uuid
 from datetime import UTC, datetime
+from typing import Any
 
 from companion_memory.job_models import ScheduledJob
 from companion_memory.job_table import JobTable
 from companion_memory.llm_client import LLMLClient
+from companion_memory.scheduler import get_slack_client
 from companion_memory.storage import LogStore
 from companion_memory.summarizer import summarize_today, summarize_week, summarize_yesterday
+
+logger = logging.getLogger(__name__)
 
 
 def get_summary(user_id: str, summary_range: str, log_store: LogStore, llm: LLMLClient) -> str:
@@ -79,3 +84,27 @@ def generate_summary_job(
 
     # Enqueue the send job
     job_table.put_job(send_job)
+
+
+def send_slack_message_job(payload: dict[str, Any]) -> None:
+    """Send a message to Slack using ephemeral payload.
+
+    Args:
+        payload: Dictionary containing slack_user_id, message, and job_uuid
+
+    """
+    # Extract payload data
+    slack_user_id = payload['slack_user_id']
+    message = payload['message']
+    job_uuid = payload.get('job_uuid', 'unknown')
+
+    logger.info('Starting send_slack_message job %s for user %s', job_uuid, slack_user_id)
+
+    # Get Slack client
+    client = get_slack_client()
+
+    # Send message to Slack
+    response = client.chat_postMessage(channel=slack_user_id, text=message)
+
+    logger.debug('Slack API response: %s', response)
+    logger.info('Successfully sent message via Slack for job %s', job_uuid)
