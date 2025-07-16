@@ -138,3 +138,106 @@ def test_get_summary_lastweek_range() -> None:
         # Assert correct function was called
         mock_summarize.assert_called_once_with(user_id='user123', log_store=mock_log_store, llm=mock_llm)
         assert result == expected_summary
+
+
+def test_generate_summary_handler_payload_model() -> None:
+    """Test that GenerateSummaryHandler returns correct payload model."""
+    from companion_memory.summary_jobs import GenerateSummaryHandler, GenerateSummaryPayload
+
+    # Test payload model method
+    assert GenerateSummaryHandler.payload_model() == GenerateSummaryPayload
+
+
+def test_generate_summary_handler_with_valid_payload() -> None:
+    """Test GenerateSummaryHandler with valid payload."""
+    from companion_memory.summary_jobs import GenerateSummaryHandler, GenerateSummaryPayload
+
+    # Create valid payload
+    payload = GenerateSummaryPayload(user_id='user123', summary_range='today')
+
+    # Mock dependencies
+    with (
+        patch('companion_memory.app.get_log_store') as mock_get_log_store,
+        patch('companion_memory.job_table.JobTable') as mock_job_table_class,
+        patch('companion_memory.llm_client.LLMLClient') as mock_llm_class,
+        patch('companion_memory.summary_jobs.generate_summary_job') as mock_generate,
+    ):
+        mock_log_store = MagicMock()
+        mock_get_log_store.return_value = mock_log_store
+        mock_job_table = MagicMock()
+        mock_job_table_class.return_value = mock_job_table
+        mock_llm = MagicMock()
+        mock_llm_class.return_value = mock_llm
+
+        # Create and use handler
+        handler = GenerateSummaryHandler()
+        handler.handle(payload)
+
+        # Verify dependencies were created correctly
+        mock_get_log_store.assert_called_once()
+        mock_job_table_class.assert_called_once()
+        mock_llm_class.assert_called_once()
+
+        # Verify business logic was called
+        mock_generate.assert_called_once_with(
+            user_id='user123',
+            summary_range='today',
+            job_table=mock_job_table,
+            log_store=mock_log_store,
+            llm=mock_llm,
+        )
+
+
+def test_generate_summary_handler_with_invalid_payload() -> None:
+    """Test GenerateSummaryHandler with invalid payload type."""
+    from companion_memory.summary_jobs import GenerateSummaryHandler
+
+    # Create invalid payload
+    invalid_payload = MagicMock()
+
+    # Test with invalid payload type
+    handler = GenerateSummaryHandler()
+    with pytest.raises(TypeError, match='Expected GenerateSummaryPayload'):
+        handler.handle(invalid_payload)
+
+
+def test_send_slack_message_handler_payload_model() -> None:
+    """Test that SendSlackMessageHandler returns correct payload model."""
+    from companion_memory.summary_jobs import SendSlackMessageHandler, SendSlackMessagePayload
+
+    # Test payload model method
+    assert SendSlackMessageHandler.payload_model() == SendSlackMessagePayload
+
+
+def test_send_slack_message_handler_with_valid_payload() -> None:
+    """Test SendSlackMessageHandler with valid payload."""
+    from companion_memory.summary_jobs import SendSlackMessageHandler, SendSlackMessagePayload
+
+    # Create valid payload
+    payload = SendSlackMessagePayload(slack_user_id='U123456789', message='Test message', job_uuid='test-uuid-123')
+
+    # Mock the business logic function
+    with patch('companion_memory.summary_jobs.send_slack_message_job') as mock_send:
+        # Create and use handler
+        handler = SendSlackMessageHandler()
+        handler.handle(payload)
+
+        # Verify business logic was called with correct parameters
+        mock_send.assert_called_once_with({
+            'slack_user_id': 'U123456789',
+            'message': 'Test message',
+            'job_uuid': 'test-uuid-123',
+        })
+
+
+def test_send_slack_message_handler_with_invalid_payload() -> None:
+    """Test SendSlackMessageHandler with invalid payload type."""
+    from companion_memory.summary_jobs import SendSlackMessageHandler
+
+    # Create invalid payload
+    invalid_payload = MagicMock()
+
+    # Test with invalid payload type
+    handler = SendSlackMessageHandler()
+    with pytest.raises(TypeError, match='Expected SendSlackMessagePayload'):
+        handler.handle(invalid_payload)

@@ -62,6 +62,7 @@ class JobWorker:
         """Register all handlers from the global dispatcher."""
         # Import handler modules to ensure decorators are executed
         import companion_memory.heartbeat
+        import companion_memory.summary_jobs
         import companion_memory.work_sampling_handler  # noqa: F401
         from companion_memory.job_dispatcher import register_all_handlers
 

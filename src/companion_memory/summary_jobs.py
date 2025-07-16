@@ -5,6 +5,9 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
+from pydantic import BaseModel, Field
+
+from companion_memory.job_dispatcher import BaseJobHandler, register_handler
 from companion_memory.job_models import ScheduledJob
 from companion_memory.job_table import JobTable
 from companion_memory.llm_client import LLMLClient
@@ -108,3 +111,85 @@ def send_slack_message_job(payload: dict[str, Any]) -> None:
 
     logger.debug('Slack API response: %s', response)
     logger.info('Successfully sent message via Slack for job %s', job_uuid)
+
+
+class GenerateSummaryPayload(BaseModel):
+    """Payload model for generate_summary jobs."""
+
+    user_id: str = Field(description='User ID to generate summary for')
+    summary_range: str = Field(description='Summary range (today, yesterday, lastweek)')
+
+
+class SendSlackMessagePayload(BaseModel):
+    """Payload model for send_slack_message jobs."""
+
+    slack_user_id: str = Field(description='Slack user ID to send message to')
+    message: str = Field(description='Message content to send')
+    job_uuid: str = Field(description='UUID for tracking this job')
+
+
+@register_handler('generate_summary')
+class GenerateSummaryHandler(BaseJobHandler):
+    """Handler for generate_summary jobs."""
+
+    @classmethod
+    def payload_model(cls) -> type[BaseModel]:
+        """Return the payload model for this handler."""
+        return GenerateSummaryPayload
+
+    def handle(self, payload: BaseModel) -> None:
+        """Process a generate_summary job.
+
+        Args:
+            payload: Validated payload containing user_id and summary_range
+
+        """
+        if not isinstance(payload, GenerateSummaryPayload):
+            msg = f'Expected GenerateSummaryPayload, got {type(payload)}'
+            raise TypeError(msg)
+
+        # Get required dependencies
+        from companion_memory.app import get_log_store
+        from companion_memory.job_table import JobTable
+        from companion_memory.llm_client import LLMLClient
+
+        job_table = JobTable()
+        log_store = get_log_store()
+        llm = LLMLClient()
+
+        # Call the existing business logic
+        generate_summary_job(
+            user_id=payload.user_id,
+            summary_range=payload.summary_range,
+            job_table=job_table,
+            log_store=log_store,
+            llm=llm,
+        )
+
+
+@register_handler('send_slack_message')
+class SendSlackMessageHandler(BaseJobHandler):
+    """Handler for send_slack_message jobs."""
+
+    @classmethod
+    def payload_model(cls) -> type[BaseModel]:
+        """Return the payload model for this handler."""
+        return SendSlackMessagePayload
+
+    def handle(self, payload: BaseModel) -> None:
+        """Process a send_slack_message job.
+
+        Args:
+            payload: Validated payload containing slack_user_id, message, and job_uuid
+
+        """
+        if not isinstance(payload, SendSlackMessagePayload):
+            msg = f'Expected SendSlackMessagePayload, got {type(payload)}'
+            raise TypeError(msg)
+
+        # Call the existing business logic
+        send_slack_message_job({
+            'slack_user_id': payload.slack_user_id,
+            'message': payload.message,
+            'job_uuid': payload.job_uuid,
+        })
