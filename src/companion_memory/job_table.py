@@ -213,12 +213,19 @@ class JobTable:
             for item in all_jobs_response.get('Items', []):
                 if item.get('status') == 'pending':  # pragma: no cover
                     all_pending_jobs.append(item.get('SK', 'unknown'))  # pragma: no cover
-                    if '2025-07-16T00:' in item.get('SK', ''):  # Today's recent jobs  # pragma: no cover
+                    # Check for today's jobs using current date
+                    today_prefix = now.strftime('%Y-%m-%dT')  # pragma: no cover
+                    if today_prefix in item.get('SK', ''):  # Today's jobs  # pragma: no cover
                         recent_pending_jobs.append(item.get('SK', 'unknown'))  # pragma: no cover
                     # Check for jobs in the last 5 minutes
                     sk = item.get('SK', '')  # pragma: no cover
-                    if sk.startswith(('scheduled#2025-07-16T00:2', 'scheduled#2025-07-16T00:3')):  # pragma: no cover
-                        very_recent_jobs.append(f'SK={sk}, status={item.get("status")}')  # pragma: no cover
+                    # Extract the timestamp from SK format: 'scheduled#2025-07-16T05:03:00.001676+00:00#...'
+                    if sk.startswith('scheduled#') and '#' in sk[10:]:  # pragma: no cover
+                        timestamp_part = sk.split('#')[1]  # pragma: no cover
+                        # Check if it's from the current hour and within last 10 minutes
+                        current_hour_prefix = now.strftime('%Y-%m-%dT%H:')  # pragma: no cover
+                        if timestamp_part.startswith(current_hour_prefix):  # pragma: no cover
+                            very_recent_jobs.append(f'SK={sk}, status={item.get("status")}')  # pragma: no cover
 
             if all_pending_jobs:  # pragma: no cover
                 logger.info('DEBUG: Found pending jobs: %s', all_pending_jobs)  # pragma: no cover
