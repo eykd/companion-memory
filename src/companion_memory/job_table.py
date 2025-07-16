@@ -148,12 +148,14 @@ class JobTable:
         logger.info('DEBUG: Query without filter returned %d items', len(response_no_filter.get('Items', [])))
         logger.info('DEBUG: Query with filter returned %d items', len(response.get('Items', [])))
 
-        # Debug: examine the first few items to see their actual status values
+        # Debug: examine the first few items to see their actual status values and SK
         for i, item in enumerate(response_no_filter.get('Items', [])[:3]):
             status_value = item.get('status')
+            sk_value = item.get('SK')
             logger.info(
-                'DEBUG: Item %d status: %s (type: %s, repr: %s)',
+                'DEBUG: Time-bounded query item %d: SK=%s, status=%s (type: %s, repr: %s)',
                 i,
+                sk_value,
                 status_value,
                 type(status_value).__name__,
                 repr(status_value),
@@ -189,14 +191,22 @@ class JobTable:
             if recent_pending_jobs:  # pragma: no cover
                 logger.info('DEBUG: Found recent pending jobs: %s', recent_pending_jobs)  # pragma: no cover
 
-            # Show first 5 jobs for debugging
+            # Show first 5 jobs for debugging with more details
             for item in all_jobs_response.get('Items', [])[:5]:
                 logger.info(  # pragma: no cover
-                    'DEBUG: Job SK=%s, status=%s, job_type=%s',
+                    'DEBUG: Full scan job SK=%s, status=%s, job_type=%s',
                     item.get('SK', 'unknown'),
                     item.get('status', 'unknown'),
                     item.get('job_type', 'unknown'),
                 )
+
+            # Compare: show what jobs would be returned by time-bounded query without filter
+            logger.info('DEBUG: Comparing time-bounded vs full scan results')  # pragma: no cover
+            logger.info(
+                'DEBUG: Time-bounded query found %d items vs full scan found %d items',  # pragma: no cover
+                len(response_no_filter.get('Items', [])),
+                len(all_jobs_response.get('Items', [])),
+            )
 
         jobs = []
         for item in response.get('Items', []):
