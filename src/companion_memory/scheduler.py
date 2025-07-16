@@ -280,6 +280,16 @@ class DistributedScheduler:
                 max_instances=1,
             )
 
+        # Schedule job cleanup (runs daily at 2 AM UTC)
+        self.scheduler.add_job(
+            self._cleanup_old_jobs,
+            'cron',
+            hour=2,
+            minute=0,
+            id='job_cleanup',
+            max_instances=1,
+        )
+
         self._jobs_added = True
         logger.info('Added active scheduler jobs')
 
@@ -310,6 +320,10 @@ class DistributedScheduler:
         # Remove job worker poller
         with contextlib.suppress(Exception):
             self.scheduler.remove_job('job_worker_poller')
+
+        # Remove job cleanup
+        with contextlib.suppress(Exception):
+            self.scheduler.remove_job('job_cleanup')
 
         self._jobs_added = False
         logger.info('Removed active scheduler jobs')
@@ -432,6 +446,24 @@ class DistributedScheduler:
 
         except Exception:
             logger.exception('Error scheduling work sampling jobs')
+
+    def _cleanup_old_jobs(self) -> None:
+        """Clean up old completed, failed, and dead_letter jobs."""
+        # Double-check we still have the lock before processing
+        if not self.lock.lock_acquired:
+            return
+
+        try:
+            # Lazy import to avoid circular imports
+            from companion_memory.job_table import JobTable
+
+            job_table = JobTable()
+            deleted_count = job_table.cleanup_old_jobs(older_than_days=7)
+
+            logger.info('Job cleanup completed: deleted %d old jobs', deleted_count)
+
+        except Exception:
+            logger.exception('Error during job cleanup')
 
     def configure_dependencies(self, log_store: LogStore, llm: LLMClient) -> None:
         """Configure log store and LLM dependencies for scheduler jobs.

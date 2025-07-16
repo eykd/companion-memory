@@ -361,3 +361,53 @@ class JobTable:
             KeyConditionExpression=Key('PK').eq('job'),
         )
         return [self._item_to_job(item) for item in response.get('Items', []) if item.get('job_id') == str(job_id)]
+
+    def cleanup_old_jobs(self, older_than_days: int = 7) -> int:
+        """Clean up old completed, failed, and dead_letter jobs.
+
+        Args:
+            older_than_days: Remove jobs older than this many days (default: 7)
+
+        Returns:
+            Number of jobs deleted
+
+        """
+        import logging
+        from datetime import UTC, datetime, timedelta
+
+        logger = logging.getLogger(__name__)
+        cutoff_date = datetime.now(UTC) - timedelta(days=older_than_days)
+        cutoff_sk = f'scheduled#{cutoff_date.isoformat()}#'
+
+        logger.info(
+            'Starting cleanup of old jobs older than %d days (before %s)', older_than_days, cutoff_date.isoformat()
+        )
+
+        # Query for jobs older than the cutoff date
+        response = self._table.query(
+            KeyConditionExpression=Key('PK').eq('job') & Key('SK').lt(cutoff_sk),
+            FilterExpression=Attr('status').is_in(['completed', 'failed', 'dead_letter', 'cancelled']),
+            ConsistentRead=True,
+        )
+
+        items_to_delete = response.get('Items', [])
+        deleted_count = 0
+
+        logger.info('Found %d old jobs to clean up', len(items_to_delete))
+
+        # Delete jobs in batches to avoid throttling
+        for item in items_to_delete:
+            try:
+                self._table.delete_item(
+                    Key={'PK': item['PK'], 'SK': item['SK']},
+                )
+                deleted_count += 1
+
+                if deleted_count % 10 == 0:  # Log progress every 10 deletions
+                    logger.info('Deleted %d old jobs so far...', deleted_count)
+
+            except Exception:  # pragma: no cover
+                logger.exception('Failed to delete job SK=%s', item.get('SK', 'unknown'))
+
+        logger.info('Cleanup completed: deleted %d old jobs', deleted_count)
+        return deleted_count

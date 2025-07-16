@@ -342,8 +342,8 @@ def test_distributed_scheduler_start_success() -> None:
         assert scheduler.started is True
         mock_scheduler.start.assert_called_once()
         assert (
-            mock_scheduler.add_job.call_count == 6
-        )  # lock_manager + heartbeat + user_timezone_sync + daily_summary_scheduler + work_sampling_scheduler + job_worker_poller
+            mock_scheduler.add_job.call_count == 7
+        )  # lock_manager + heartbeat + user_timezone_sync + daily_summary_scheduler + work_sampling_scheduler + job_worker_poller + job_cleanup
         mock_acquire.assert_called_once()
 
 
@@ -545,12 +545,13 @@ def test_distributed_scheduler_remove_active_jobs() -> None:
         # Call the method
         scheduler._remove_active_jobs()  # noqa: SLF001
 
-        # Should remove four jobs
-        assert mock_scheduler.remove_job.call_count == 4
+        # Should remove five jobs
+        assert mock_scheduler.remove_job.call_count == 5
         mock_scheduler.remove_job.assert_any_call('heartbeat_logger')
         mock_scheduler.remove_job.assert_any_call('daily_summary_scheduler')
         mock_scheduler.remove_job.assert_any_call('work_sampling_scheduler')
         mock_scheduler.remove_job.assert_any_call('job_worker_poller')
+        mock_scheduler.remove_job.assert_any_call('job_cleanup')
         assert scheduler._jobs_added is False  # noqa: SLF001
 
 
@@ -902,10 +903,10 @@ def test_distributed_scheduler_job_worker_disabled() -> None:
         with patch.object(scheduler.lock, 'acquire', mock_acquire):
             scheduler.start()
 
-        # Should only add 5 jobs (not including job worker poller)
+        # Should only add 6 jobs (not including job worker poller)
         assert (
-            mock_scheduler.add_job.call_count == 5
-        )  # lock_manager + heartbeat + user_timezone_sync + daily_summary_scheduler + work_sampling_scheduler
+            mock_scheduler.add_job.call_count == 6
+        )  # lock_manager + heartbeat + user_timezone_sync + daily_summary_scheduler + work_sampling_scheduler + job_cleanup
 
 
 def test_distributed_scheduler_remove_job_worker_poller() -> None:
@@ -1051,3 +1052,113 @@ def test_distributed_scheduler_schedule_work_sampling_jobs_exception() -> None:
 
             # Should log the exception
             mock_logger.exception.assert_called_once_with('Error scheduling work sampling jobs')
+
+
+def test_distributed_scheduler_cleanup_old_jobs_with_lock() -> None:
+    """Test _cleanup_old_jobs when lock is held."""
+    with (
+        patch('boto3.resource'),
+        patch('companion_memory.scheduler.logger') as mock_logger,
+    ):
+        scheduler = DistributedScheduler('TestTable')
+        scheduler.lock.lock_acquired = True
+
+        # Mock JobTable and its cleanup method
+        mock_job_table = MagicMock()
+        mock_job_table.cleanup_old_jobs.return_value = 42  # Deleted 42 jobs
+
+        with patch('companion_memory.job_table.JobTable', return_value=mock_job_table):
+            # Call the method
+            scheduler._cleanup_old_jobs()  # noqa: SLF001
+
+            # Should create JobTable and call cleanup
+            mock_job_table.cleanup_old_jobs.assert_called_once_with(older_than_days=7)
+
+            # Should log success
+            mock_logger.info.assert_called_with('Job cleanup completed: deleted %d old jobs', 42)
+
+
+def test_distributed_scheduler_cleanup_old_jobs_without_lock() -> None:
+    """Test _cleanup_old_jobs when lock is not held."""
+    with patch('boto3.resource'):
+        scheduler = DistributedScheduler('TestTable')
+        scheduler.lock.lock_acquired = False
+
+        # Mock JobTable
+        mock_job_table = MagicMock()
+
+        with patch('companion_memory.job_table.JobTable', return_value=mock_job_table):
+            # Call the method
+            scheduler._cleanup_old_jobs()  # noqa: SLF001
+
+            # Should not call cleanup when lock is not held
+            mock_job_table.cleanup_old_jobs.assert_not_called()
+
+
+def test_distributed_scheduler_cleanup_old_jobs_exception() -> None:
+    """Test _cleanup_old_jobs when an exception occurs."""
+    with (
+        patch('boto3.resource'),
+        patch('companion_memory.scheduler.logger') as mock_logger,
+    ):
+        scheduler = DistributedScheduler('TestTable')
+        scheduler.lock.lock_acquired = True
+
+        # Mock JobTable to raise an exception
+        with patch('companion_memory.job_table.JobTable', side_effect=Exception('Import error')):
+            # Call the method - should not raise exception
+            scheduler._cleanup_old_jobs()  # noqa: SLF001
+
+            # Should log the exception
+            mock_logger.exception.assert_called_once_with('Error during job cleanup')
+
+
+def test_distributed_scheduler_adds_cleanup_job() -> None:
+    """Test that scheduler adds cleanup job when acquiring lock."""
+    with (
+        patch('boto3.resource'),
+        patch('companion_memory.scheduler.BackgroundScheduler') as mock_scheduler_class,
+    ):
+        mock_scheduler = MagicMock()
+        mock_scheduler_class.return_value = mock_scheduler
+
+        scheduler = DistributedScheduler('TestTable')
+        scheduler.scheduler = mock_scheduler
+        scheduler.lock.lock_acquired = True
+
+        # Call _add_active_jobs
+        scheduler._add_active_jobs()  # noqa: SLF001
+
+        # Should add cleanup job
+        cleanup_calls = [
+            call for call in mock_scheduler.add_job.call_args_list if len(call[0]) > 0 and 'cleanup' in str(call[0][0])
+        ]
+        assert len(cleanup_calls) == 1
+
+        # Verify it's a cron job scheduled for 2 AM UTC
+        call_args = cleanup_calls[0]
+        assert call_args[0][1] == 'cron'  # Second positional arg should be 'cron'
+        assert call_args[1]['hour'] == 2  # Should run at 2 AM
+        assert call_args[1]['minute'] == 0  # Should run at :00 minutes
+        assert call_args[1]['id'] == 'job_cleanup'
+
+
+def test_distributed_scheduler_removes_cleanup_job() -> None:
+    """Test that scheduler removes cleanup job when losing lock."""
+    with (
+        patch('boto3.resource'),
+        patch('companion_memory.scheduler.BackgroundScheduler') as mock_scheduler_class,
+    ):
+        mock_scheduler = MagicMock()
+        mock_scheduler_class.return_value = mock_scheduler
+
+        scheduler = DistributedScheduler('TestTable')
+        scheduler.scheduler = mock_scheduler
+        scheduler._jobs_added = True  # Simulate jobs were added  # noqa: SLF001
+
+        # Call _remove_active_jobs
+        scheduler._remove_active_jobs()  # noqa: SLF001
+
+        # Should remove cleanup job
+        remove_calls = [call for call in mock_scheduler.remove_job.call_args_list if call[0][0] == 'job_cleanup']
+        assert len(remove_calls) == 1
