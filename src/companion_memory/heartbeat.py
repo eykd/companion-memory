@@ -128,6 +128,14 @@ def schedule_event_heartbeat_job(heartbeat_uuid: str) -> None:
 
     # Store the job in DynamoDB
     job_table = JobTable()
+
+    # Debug: log table configuration
+    import os
+
+    table_name = 'CompanionMemory'  # Default table name
+    region = os.environ.get('AWS_DEFAULT_REGION', 'us-east-1')
+    logger.info('DEBUG HEARTBEAT: Creating job_table with table_name=%s, region=%s', table_name, region)
+
     try:
         job_table.put_job(job)
         logger.info('Created heartbeat event job: job_id=%s, scheduled_for=%s', job.job_id, job.scheduled_for)

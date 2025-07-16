@@ -145,6 +145,14 @@ class JobTable:
         import logging
 
         logger = logging.getLogger(__name__)
+
+        # Debug: log table configuration for get_due_jobs
+        import os
+
+        table_name = 'CompanionMemory'  # Default table name
+        region = os.environ.get('AWS_DEFAULT_REGION', 'us-east-1')
+        logger.info('DEBUG GET_DUE_JOBS: Using table_name=%s, region=%s', table_name, region)
+
         logger.info('DEBUG: Query without filter returned %d items', len(response_no_filter.get('Items', [])))
         logger.info('DEBUG: Query with filter returned %d items', len(response.get('Items', [])))
 
