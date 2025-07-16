@@ -131,6 +131,7 @@ class JobTable:
             KeyConditionExpression=Key('PK').eq('job') & Key('SK').lte(query_sk),
             FilterExpression=Key('status').eq('pending'),
             Limit=limit,
+            ConsistentRead=True,  # Use strongly consistent reads to avoid eventual consistency issues
         )
 
         # Debug logging to understand what's being retrieved
@@ -143,9 +144,27 @@ class JobTable:
         # Additional debug logging for heartbeat jobs
         if len(response.get('Items', [])) == 0:
             # Query all jobs to see what's actually in the table
-            all_jobs_response = self._table.query(KeyConditionExpression=Key('PK').eq('job'), Limit=10)
+            all_jobs_response = self._table.query(
+                KeyConditionExpression=Key('PK').eq('job'), Limit=50, ConsistentRead=True
+            )
             logger.info('DEBUG: Found %d total job items in table', len(all_jobs_response.get('Items', [])))
+
+            # Look specifically for recent pending jobs
+            recent_pending_jobs = []
+            all_pending_jobs = []
             for item in all_jobs_response.get('Items', []):
+                if item.get('status') == 'pending':
+                    all_pending_jobs.append(item.get('SK', 'unknown'))
+                    if '2025-07-15T23:' in item.get('SK', ''):  # Today's jobs
+                        recent_pending_jobs.append(item.get('SK', 'unknown'))
+
+            if all_pending_jobs:
+                logger.info('DEBUG: Found pending jobs: %s', all_pending_jobs)
+            if recent_pending_jobs:
+                logger.info('DEBUG: Found recent pending jobs: %s', recent_pending_jobs)
+
+            # Show first 5 jobs for debugging
+            for item in all_jobs_response.get('Items', [])[:5]:
                 logger.info(  # pragma: no cover
                     'DEBUG: Job SK=%s, status=%s, job_type=%s',
                     item.get('SK', 'unknown'),
