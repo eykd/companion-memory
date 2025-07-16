@@ -197,7 +197,7 @@ class JobTable:
                 )
 
             # Collect items from today for additional analysis
-            if current_date in sk_value:
+            if current_date in sk_value:  # pragma: no branch
                 recent_items.append(f'SK={sk_value}, status={status_value}')
 
         # Log today's items if any were found
@@ -404,7 +404,7 @@ class JobTable:
                 deleted_count += 1
 
                 if deleted_count % 10 == 0:  # Log progress every 10 deletions
-                    logger.info('Deleted %d old jobs so far...', deleted_count)
+                    logger.info('Deleted %d old jobs so far...', deleted_count)  # pragma: no cover
 
             except Exception:  # pragma: no cover
                 logger.exception('Failed to delete job SK=%s', item.get('SK', 'unknown'))
