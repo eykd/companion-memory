@@ -147,6 +147,23 @@ class JobTable:
         logger = logging.getLogger(__name__)
         logger.info('DEBUG: Query without filter returned %d items', len(response_no_filter.get('Items', [])))
         logger.info('DEBUG: Query with filter returned %d items', len(response.get('Items', [])))
+
+        # Debug: examine the first few items to see their actual status values
+        for i, item in enumerate(response_no_filter.get('Items', [])[:3]):
+            status_value = item.get('status')
+            logger.info(
+                'DEBUG: Item %d status: %s (type: %s, repr: %s)',
+                i,
+                status_value,
+                type(status_value).__name__,
+                repr(status_value),
+            )
+
+        # Test different filter approaches
+        pending_count_manual = len([
+            item for item in response_no_filter.get('Items', []) if item.get('status') == 'pending'
+        ])
+        logger.info('DEBUG: Manual filter count for status==pending: %d', pending_count_manual)
         logger.info('DEBUG: Querying with now=%s, query_sk=%s', now.isoformat(), repr(query_sk))
         logger.info('DynamoDB query for jobs <= %s returned %d items', query_sk, len(response.get('Items', [])))
 
