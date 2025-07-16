@@ -98,19 +98,15 @@ class JobWorker:
             # Filter jobs that are eligible for processing
             if not self._is_job_eligible(job, now):
                 # Log why job was skipped
-                if job.status != 'pending':
-                    logger.info('Skipping job %s: status=%s (not pending)', job.job_id, job.status)  # pragma: no cover
-                elif job.lock_expires_at is not None and job.lock_expires_at > now:  # pragma: no cover
-                    logger.info('Skipping job %s: locked until %s', job.job_id, job.lock_expires_at)
+                # Job skipped (debug logging removed)
                 continue
 
             # Claim and run the job
-            logger.info('Attempting to claim and run job %s (type=%s)', job.job_id, job.job_type)
             if self._claim_and_run(job, now):
                 processed_count += 1
-                logger.info('Successfully processed job %s', job.job_id)
+                logger.info('Job completed: %s', job.job_id)
             else:
-                logger.info('Failed to claim job %s', job.job_id)
+                pass  # Failed to claim job (debug logging removed)
 
         return processed_count
 
@@ -187,7 +183,7 @@ class JobWorker:
 
         """
         try:
-            # Enhanced logging for heartbeat job dispatch
+            # Heartbeat job dispatch logging
             if job.job_type == 'heartbeat_event':
                 logger.info(
                     'HEARTBEAT JOB DISPATCH: job_id=%s, payload=%s, scheduled_for=%s',
@@ -197,9 +193,7 @@ class JobWorker:
                 )
 
             # Dispatch job to handler
-            logger.info('Dispatching job %s (type=%s) to handler', job.job_id, job.job_type)
             self._dispatcher.dispatch(job)
-            logger.info('Job %s dispatched successfully', job.job_id)
 
             # Mark job as completed
             self._job_table.update_job_status(
@@ -228,7 +222,7 @@ class JobWorker:
         error_message = f'{type(error).__name__}: {error}\n{traceback.format_exc()}'
         new_attempts = job.attempts + 1
 
-        # Enhanced logging for heartbeat job failures
+        # Job failure (debug logging removed)
         if job.job_type == 'heartbeat_event':
             logger.error(
                 'HEARTBEAT JOB FAILURE: job_id=%s, attempts=%d, error=%s, payload=%s',
@@ -246,25 +240,22 @@ class JobWorker:
             # Calculate next run time with exponential backoff
             next_run = self._retry_policy.calculate_next_run(now, new_attempts)
 
-            # Enhanced logging for heartbeat job retry
             if job.job_type == 'heartbeat_event':
                 logger.info(
-                    'HEARTBEAT JOB RETRY: job_id=%s, attempt=%d, next_run=%s',
+                    'HEARTBEAT JOB RETRY: job_id=%s, attempts=%d, error=%s, payload=%s, next_run=%s',
                     job.job_id,
                     new_attempts,
-                    next_run.isoformat(),
+                    f'{type(error).__name__}: {error}',
+                    job.payload,
+                    next_run,
                 )
 
             # Reschedule the job for later
             self._reschedule_job(job, next_run, new_attempts, error_message)
         else:
-            # Enhanced logging for heartbeat job dead letter
+            # Job dead letter (debug logging removed)
             if job.job_type == 'heartbeat_event':
-                logger.error(
-                    'HEARTBEAT JOB DEAD LETTER: job_id=%s, max_attempts exceeded',
-                    job.job_id,
-                )
-
+                logger.error('HEARTBEAT JOB DEAD LETTER: job_id=%s, max_attempts exceeded', job.job_id)
             # Job has exceeded max attempts, send to dead letter
             self._job_table.update_job_status(
                 job.job_id,

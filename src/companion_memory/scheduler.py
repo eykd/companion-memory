@@ -291,7 +291,6 @@ class DistributedScheduler:
         )
 
         self._jobs_added = True
-        logger.info('Added active scheduler jobs')
 
     def _remove_active_jobs(self) -> None:
         """Remove active jobs when we lose the lock."""
@@ -326,21 +325,18 @@ class DistributedScheduler:
             self.scheduler.remove_job('job_cleanup')
 
         self._jobs_added = False
-        logger.info('Removed active scheduler jobs')
 
     def _heartbeat_logger(self) -> None:
         """Log a heartbeat message to indicate scheduler is active."""
         # Double-check we still have the lock before logging
         if self.lock.lock_acquired:
-            logger.info('Scheduler heartbeat - process %s active', self.lock.process_id)
+            pass  # Heartbeat logging removed per request
 
     def _poll_and_process_jobs(self) -> None:
         """Poll and process scheduled jobs from the job queue."""
         # Double-check we still have the lock before processing
         if not self.lock.lock_acquired:
             return
-
-        logger.info('Job worker polling started')
 
         try:
             # Lazy initialize job worker to avoid circular imports
@@ -354,35 +350,8 @@ class DistributedScheduler:
                 # Register all handlers with the job worker
                 self._job_worker.register_all_handlers_from_global()
 
-                # Debug logging to show registered handlers
-                registered_handlers = self._job_worker.get_registered_handlers()
-                logger.info('Job worker initialized with handlers: %s', list(registered_handlers.keys()))
-                logger.info('Job worker initialized for scheduler integration')
-
             # Poll and process jobs
-            processed_count = self._job_worker.poll_and_process_jobs()
-            if processed_count > 0:
-                logger.info('Scheduler processed %d jobs', processed_count)
-            else:
-                # Debug logging to understand why no jobs are being processed
-                from datetime import UTC, datetime
-
-                from companion_memory.job_table import JobTable
-
-                job_table = JobTable()
-                due_jobs = job_table.get_due_jobs(datetime.now(UTC), limit=5)
-                logger.info('Job worker found %d due jobs during polling', len(due_jobs))
-                if due_jobs:  # pragma: no cover
-                    for job in due_jobs:
-                        logger.info(
-                            'Due job: %s, type=%s, status=%s, scheduled_for=%s',
-                            job.job_id,
-                            job.job_type,
-                            job.status,
-                            job.scheduled_for,
-                        )
-                else:
-                    logger.info('No due jobs found - checking recent heartbeat job creation')
+            self._job_worker.poll_and_process_jobs()
 
         except Exception:
             logger.exception('Error in job worker polling')
@@ -411,7 +380,6 @@ class DistributedScheduler:
                 job_table=job_table,
                 deduplication_index=deduplication_index,
             )
-
             logger.info('Scheduled daily summary jobs')
 
         except Exception:
@@ -442,8 +410,6 @@ class DistributedScheduler:
                 deduplication_index=deduplication_index,
             )
 
-            logger.info('Scheduled work sampling prompt jobs')
-
         except Exception:
             logger.exception('Error scheduling work sampling jobs')
 
@@ -459,7 +425,6 @@ class DistributedScheduler:
 
             job_table = JobTable()
             deleted_count = job_table.cleanup_old_jobs(older_than_days=7)
-
             logger.info('Job cleanup completed: deleted %d old jobs', deleted_count)
 
         except Exception:

@@ -426,27 +426,26 @@ def test_distributed_scheduler_manage_lock_without_lock() -> None:
 
 def test_distributed_scheduler_heartbeat_logger() -> None:
     """Test scheduler heartbeat logger when lock is held."""
-    with patch('boto3.resource'), patch('companion_memory.scheduler.logger') as mock_logger:
+    with patch('boto3.resource'):
         scheduler = DistributedScheduler('TestTable')
         scheduler.lock.lock_acquired = True  # Must have lock to log heartbeat
 
         # Access private method for testing
         scheduler._heartbeat_logger()  # noqa: SLF001
 
-        mock_logger.info.assert_called_once_with('Scheduler heartbeat - process %s active', scheduler.lock.process_id)
+        # Heartbeat logging was removed - just verify method executes without error
 
 
 def test_distributed_scheduler_heartbeat_logger_without_lock() -> None:
     """Test scheduler heartbeat logger when lock is not held."""
-    with patch('boto3.resource'), patch('companion_memory.scheduler.logger') as mock_logger:
+    with patch('boto3.resource'):
         scheduler = DistributedScheduler('TestTable')
         scheduler.lock.lock_acquired = False  # No lock
 
         # Access private method for testing
         scheduler._heartbeat_logger()  # noqa: SLF001
 
-        # Should not log when no lock
-        mock_logger.info.assert_not_called()
+        # Heartbeat logging was removed - method should execute without error or logging
 
 
 def test_distributed_scheduler_add_job_when_started() -> None:
@@ -715,7 +714,6 @@ def test_distributed_scheduler_poll_and_process_jobs_with_lock() -> None:
         patch('boto3.resource'),
         patch('companion_memory.job_table.JobTable') as mock_job_table_class,
         patch('companion_memory.job_worker.JobWorker') as mock_job_worker_class,
-        patch('companion_memory.scheduler.logger') as mock_logger,
     ):
         mock_job_table = MagicMock()
         mock_job_table_class.return_value = mock_job_table
@@ -735,19 +733,15 @@ def test_distributed_scheduler_poll_and_process_jobs_with_lock() -> None:
         mock_job_table_class.assert_called_once()
         mock_job_worker_class.assert_called_once_with(mock_job_table)
         mock_job_worker.poll_and_process_jobs.assert_called_once()
-        mock_logger.info.assert_any_call('Job worker initialized for scheduler integration')
-        mock_logger.info.assert_any_call('Scheduler processed %d jobs', 3)
+        # Verify job worker was properly initialized and used
 
 
 def test_distributed_scheduler_poll_and_process_jobs_no_jobs_processed() -> None:
     """Test _poll_and_process_jobs when no jobs are processed."""
-    from unittest.mock import call
-
     with (
         patch('boto3.resource'),
         patch('companion_memory.job_table.JobTable') as mock_job_table_class,
         patch('companion_memory.job_worker.JobWorker') as mock_job_worker_class,
-        patch('companion_memory.scheduler.logger') as mock_logger,
     ):
         mock_job_table = MagicMock()
         mock_job_table_class.return_value = mock_job_table
@@ -762,14 +756,8 @@ def test_distributed_scheduler_poll_and_process_jobs_no_jobs_processed() -> None
         # Call the method
         scheduler._poll_and_process_jobs()  # noqa: SLF001
 
-        # Should log polling started, job worker initialized, and job count
-        expected_calls = [
-            call('Job worker polling started'),
-            call('Job worker initialized with handlers: %s', []),
-            call('Job worker initialized for scheduler integration'),
-            call('Job worker found %d due jobs during polling', 0),
-        ]
-        mock_logger.info.assert_has_calls(expected_calls)
+        # Verify job worker was initialized and called
+        mock_job_worker.poll_and_process_jobs.assert_called_once()
 
 
 def test_distributed_scheduler_poll_and_process_jobs_debug_logging_with_due_jobs() -> None:
@@ -783,7 +771,6 @@ def test_distributed_scheduler_poll_and_process_jobs_debug_logging_with_due_jobs
         patch('boto3.resource'),
         patch('companion_memory.job_table.JobTable') as mock_job_table_class,
         patch('companion_memory.job_worker.JobWorker') as mock_job_worker_class,
-        patch('companion_memory.scheduler.logger') as mock_logger,
     ):
         # Create mock due jobs
         due_job1 = ScheduledJob(
@@ -821,23 +808,8 @@ def test_distributed_scheduler_poll_and_process_jobs_debug_logging_with_due_jobs
         # Call the method
         scheduler._poll_and_process_jobs()  # noqa: SLF001
 
-        # Verify info logging was called
-        mock_logger.info.assert_any_call('Job worker polling started')
-        mock_logger.info.assert_any_call('Job worker found %d due jobs during polling', 2)
-        mock_logger.info.assert_any_call(
-            'Due job: %s, type=%s, status=%s, scheduled_for=%s',
-            due_job1.job_id,
-            due_job1.job_type,
-            due_job1.status,
-            due_job1.scheduled_for,
-        )
-        mock_logger.info.assert_any_call(
-            'Due job: %s, type=%s, status=%s, scheduled_for=%s',
-            due_job2.job_id,
-            due_job2.job_type,
-            due_job2.status,
-            due_job2.scheduled_for,
-        )
+        # Verify job worker was called
+        mock_job_worker.poll_and_process_jobs.assert_called_once()
 
 
 def test_distributed_scheduler_poll_and_process_jobs_no_due_jobs_found() -> None:
@@ -846,7 +818,6 @@ def test_distributed_scheduler_poll_and_process_jobs_no_due_jobs_found() -> None
         patch('boto3.resource'),
         patch('companion_memory.job_table.JobTable') as mock_job_table_class,
         patch('companion_memory.job_worker.JobWorker') as mock_job_worker_class,
-        patch('companion_memory.scheduler.logger') as mock_logger,
     ):
         # Mock job table with no due jobs
         mock_job_table = MagicMock()
@@ -864,10 +835,8 @@ def test_distributed_scheduler_poll_and_process_jobs_no_due_jobs_found() -> None
         # Call the method
         scheduler._poll_and_process_jobs()  # noqa: SLF001
 
-        # Verify the specific logging for no due jobs found (line 368)
-        mock_logger.info.assert_any_call('Job worker polling started')
-        mock_logger.info.assert_any_call('Job worker found %d due jobs during polling', 0)
-        mock_logger.info.assert_any_call('No due jobs found - checking recent heartbeat job creation')
+        # Verify job worker was called
+        mock_job_worker.poll_and_process_jobs.assert_called_once()
 
 
 def test_distributed_scheduler_poll_and_process_jobs_exception() -> None:
@@ -1012,7 +981,6 @@ def test_distributed_scheduler_schedule_work_sampling_jobs_with_lock() -> None:
         patch('companion_memory.user_settings.DynamoUserSettingsStore') as mock_settings_store,
         patch('companion_memory.job_table.JobTable') as mock_job_table,
         patch('companion_memory.deduplication.DeduplicationIndex') as mock_dedup_index,
-        patch('companion_memory.scheduler.logger') as mock_logger,
     ):
         scheduler = DistributedScheduler('TestTable')
         scheduler.lock.lock_acquired = True
@@ -1032,8 +1000,7 @@ def test_distributed_scheduler_schedule_work_sampling_jobs_with_lock() -> None:
             deduplication_index=mock_dedup_index.return_value,
         )
 
-        # Should log success
-        mock_logger.info.assert_called_with('Scheduled work sampling prompt jobs')
+        # Verify scheduling function was called (success logging removed)
 
 
 def test_distributed_scheduler_schedule_work_sampling_jobs_exception() -> None:

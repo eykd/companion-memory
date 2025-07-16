@@ -75,40 +75,7 @@ class JobTable:
         if job.completed_at is not None:
             item['completed_at'] = job.completed_at.isoformat()
 
-        # Debug logging for heartbeat jobs
-        import logging
-
-        logger = logging.getLogger(__name__)
-        if job.job_type == 'heartbeat_event':
-            logger.info(
-                'DEBUG: Storing heartbeat job - SK=%s, status=%s, scheduled_for=%s',
-                item['SK'],
-                item['status'],
-                item['scheduled_for'],
-            )
-
-        # Enhanced error handling and logging for DynamoDB write operations
-        try:
-            logger.info('DEBUG: About to call put_item for job %s', item['SK'])
-            response = self._table.put_item(Item=item)
-            logger.info(
-                'DEBUG: put_item returned successfully, response metadata: %s', response.get('ResponseMetadata', {})
-            )
-
-            # Verify the write by immediately reading it back for heartbeat jobs
-            if job.job_type == 'heartbeat_event':
-                try:
-                    verify_response = self._table.get_item(Key={'PK': 'job', 'SK': item['SK']}, ConsistentRead=True)
-                    if 'Item' in verify_response:
-                        logger.info('DEBUG: Verification read SUCCESS - job exists in DynamoDB')
-                    else:  # pragma: no cover
-                        logger.error('DEBUG: Verification read FAILED - job NOT found in DynamoDB after put_item')
-                except Exception:  # pragma: no cover
-                    logger.exception('DEBUG: Verification read ERROR')
-
-        except Exception:  # pragma: no cover
-            logger.exception('DEBUG: put_item FAILED')
-            raise
+        self._table.put_item(Item=item)
 
     def get_job_by_id(self, job_id: UUID, scheduled_for: datetime) -> ScheduledJob | None:
         """Get a job by its ID and scheduled_for time.
@@ -133,7 +100,7 @@ class JobTable:
         except Exception:  # noqa: BLE001  # pragma: no cover
             return None
 
-    def get_due_jobs(self, now: datetime, limit: int = 25) -> list[ScheduledJob]:  # noqa: C901
+    def get_due_jobs(self, now: datetime, limit: int = 25) -> list[ScheduledJob]:
         """Fetch jobs that are due to run before the given time.
 
         Args:
@@ -148,126 +115,12 @@ class JobTable:
         # Use 'z' to ensure we capture all UUIDs for timestamps <= now (UUIDs use hex digits 0-9,a-f)
         query_sk = f'scheduled#{now.isoformat()}#z'
 
-        # Try query without filter first to debug
-        response_no_filter = self._table.query(
-            KeyConditionExpression=Key('PK').eq('job') & Key('SK').lte(query_sk),
-            Limit=limit,
-            ConsistentRead=True,
-        )
-
         response = self._table.query(
             KeyConditionExpression=Key('PK').eq('job') & Key('SK').lte(query_sk),
             FilterExpression=Attr('status').eq('pending'),
             Limit=limit,
-            ConsistentRead=True,  # Use strongly consistent reads to avoid eventual consistency issues
+            ConsistentRead=True,
         )
-
-        # Debug logging to understand what's being retrieved
-        import logging
-
-        logger = logging.getLogger(__name__)
-
-        # Debug: log table configuration for get_due_jobs
-        import os
-
-        table_name = 'CompanionMemory'  # Default table name
-        region = os.environ.get('AWS_DEFAULT_REGION', 'us-east-1')
-        logger.info('DEBUG GET_DUE_JOBS: Using table_name=%s, region=%s', table_name, region)
-
-        logger.info('DEBUG: Query without filter returned %d items', len(response_no_filter.get('Items', [])))
-        logger.info('DEBUG: Query with filter returned %d items', len(response.get('Items', [])))
-
-        # Debug: examine ALL items to see their actual status values and SK, especially recent ones
-        recent_items = []
-        current_date = now.strftime('%Y-%m-%d')
-
-        for i, item in enumerate(response_no_filter.get('Items', [])):
-            status_value = item.get('status')
-            sk_value = item.get('SK', '')
-
-            # Log first 3 items as before
-            if i < 3:
-                logger.info(
-                    'DEBUG: Time-bounded query item %d: SK=%s, status=%s (type: %s, repr: %s)',
-                    i,
-                    sk_value,
-                    status_value,
-                    type(status_value).__name__,
-                    repr(status_value),
-                )
-
-            # Collect items from today for additional analysis
-            if current_date in sk_value:  # pragma: no branch
-                recent_items.append(f'SK={sk_value}, status={status_value}')
-
-        # Log today's items if any were found
-        if recent_items:
-            logger.info('DEBUG: Found items from today (%s): %s', current_date, recent_items[:10])
-        else:
-            logger.info('DEBUG: No items found from today (%s) in time-bounded query', current_date)
-
-        # Test different filter approaches
-        pending_count_manual = len([
-            item for item in response_no_filter.get('Items', []) if item.get('status') == 'pending'
-        ])
-        logger.info('DEBUG: Manual filter count for status==pending: %d', pending_count_manual)
-        logger.info('DEBUG: Querying with now=%s, query_sk=%s', now.isoformat(), repr(query_sk))
-        logger.info('DynamoDB query for jobs <= %s returned %d items', query_sk, len(response.get('Items', [])))
-
-        # Additional debug logging for heartbeat jobs
-        if len(response.get('Items', [])) == 0:
-            # Query all jobs to see what's actually in the table
-            all_jobs_response = self._table.query(
-                KeyConditionExpression=Key('PK').eq('job'), Limit=50, ConsistentRead=True
-            )
-            logger.info('DEBUG: Found %d total job items in table', len(all_jobs_response.get('Items', [])))
-
-            # Look specifically for recent pending jobs
-            recent_pending_jobs = []
-            all_pending_jobs = []
-            very_recent_jobs = []  # Jobs from the last few minutes
-            for item in all_jobs_response.get('Items', []):
-                if item.get('status') == 'pending':  # pragma: no cover
-                    all_pending_jobs.append(item.get('SK', 'unknown'))  # pragma: no cover
-                    # Check for today's jobs using current date
-                    today_prefix = now.strftime('%Y-%m-%dT')  # pragma: no cover
-                    if today_prefix in item.get('SK', ''):  # Today's jobs  # pragma: no cover
-                        recent_pending_jobs.append(item.get('SK', 'unknown'))  # pragma: no cover
-                    # Check for jobs in the last 5 minutes
-                    sk = item.get('SK', '')  # pragma: no cover
-                    # Extract the timestamp from SK format: 'scheduled#2025-07-16T05:03:00.001676+00:00#...'
-                    if sk.startswith('scheduled#') and '#' in sk[10:]:  # pragma: no cover
-                        timestamp_part = sk.split('#')[1]  # pragma: no cover
-                        # Check if it's from the current hour and within last 10 minutes
-                        current_hour_prefix = now.strftime('%Y-%m-%dT%H:')  # pragma: no cover
-                        if timestamp_part.startswith(current_hour_prefix):  # pragma: no cover
-                            very_recent_jobs.append(f'SK={sk}, status={item.get("status")}')  # pragma: no cover
-
-            if all_pending_jobs:  # pragma: no cover
-                logger.info('DEBUG: Found pending jobs: %s', all_pending_jobs)  # pragma: no cover
-            if recent_pending_jobs:  # pragma: no cover
-                logger.info('DEBUG: Found recent pending jobs: %s', recent_pending_jobs)  # pragma: no cover
-            if very_recent_jobs:  # pragma: no cover
-                logger.info('DEBUG: Found very recent jobs (last 5 min): %s', very_recent_jobs)  # pragma: no cover
-            else:  # pragma: no cover
-                logger.info('DEBUG: No very recent jobs found in full scan')  # pragma: no cover
-
-            # Show first 5 jobs for debugging with more details
-            for item in all_jobs_response.get('Items', [])[:5]:
-                logger.info(  # pragma: no cover
-                    'DEBUG: Full scan job SK=%s, status=%s, job_type=%s',
-                    item.get('SK', 'unknown'),
-                    item.get('status', 'unknown'),
-                    item.get('job_type', 'unknown'),
-                )
-
-            # Compare: show what jobs would be returned by time-bounded query without filter
-            logger.info('DEBUG: Comparing time-bounded vs full scan results')  # pragma: no cover
-            logger.info(
-                'DEBUG: Time-bounded query found %d items vs full scan found %d items',  # pragma: no cover
-                len(response_no_filter.get('Items', [])),
-                len(all_jobs_response.get('Items', [])),
-            )
 
         jobs = []
         for item in response.get('Items', []):
@@ -379,9 +232,7 @@ class JobTable:
         cutoff_date = datetime.now(UTC) - timedelta(days=older_than_days)
         cutoff_sk = f'scheduled#{cutoff_date.isoformat()}#'
 
-        logger.info(
-            'Starting cleanup of old jobs older than %d days (before %s)', older_than_days, cutoff_date.isoformat()
-        )
+        # Starting cleanup of old jobs
 
         # Query for jobs older than the cutoff date
         response = self._table.query(
@@ -393,7 +244,7 @@ class JobTable:
         items_to_delete = response.get('Items', [])
         deleted_count = 0
 
-        logger.info('Found %d old jobs to clean up', len(items_to_delete))
+        # Found old jobs to clean up
 
         # Delete jobs in batches to avoid throttling
         for item in items_to_delete:
@@ -403,11 +254,10 @@ class JobTable:
                 )
                 deleted_count += 1
 
-                if deleted_count % 10 == 0:  # Log progress every 10 deletions
-                    logger.info('Deleted %d old jobs so far...', deleted_count)  # pragma: no cover
+                # Progress tracking removed
 
             except Exception:  # pragma: no cover
                 logger.exception('Failed to delete job SK=%s', item.get('SK', 'unknown'))
 
-        logger.info('Cleanup completed: deleted %d old jobs', deleted_count)
+        # Cleanup completed
         return deleted_count
