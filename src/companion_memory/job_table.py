@@ -5,7 +5,7 @@ from typing import Any
 from uuid import UUID
 
 import boto3
-from boto3.dynamodb.conditions import Key
+from boto3.dynamodb.conditions import Attr, Key
 
 from companion_memory.job_models import ScheduledJob, make_job_sk
 
@@ -136,7 +136,7 @@ class JobTable:
 
         response = self._table.query(
             KeyConditionExpression=Key('PK').eq('job') & Key('SK').lte(query_sk),
-            FilterExpression=Key('status').eq('pending'),
+            FilterExpression=Attr('status').eq('pending'),
             Limit=limit,
             ConsistentRead=True,  # Use strongly consistent reads to avoid eventual consistency issues
         )
