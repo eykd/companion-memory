@@ -145,8 +145,8 @@ class JobTable:
 
         """
         # Query for jobs with SK up to the current time
-        # Use a high Unicode character to ensure we capture all UUIDs for timestamps <= now
-        query_sk = f'scheduled#{now.isoformat()}#\uffff'
+        # Use 'z' to ensure we capture all UUIDs for timestamps <= now (UUIDs use hex digits 0-9,a-f)
+        query_sk = f'scheduled#{now.isoformat()}#z'
 
         # Try query without filter first to debug
         response_no_filter = self._table.query(
