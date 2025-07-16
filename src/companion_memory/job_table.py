@@ -87,7 +87,28 @@ class JobTable:
                 item['scheduled_for'],
             )
 
-        self._table.put_item(Item=item)
+        # Enhanced error handling and logging for DynamoDB write operations
+        try:
+            logger.info('DEBUG: About to call put_item for job %s', item['SK'])
+            response = self._table.put_item(Item=item)
+            logger.info(
+                'DEBUG: put_item returned successfully, response metadata: %s', response.get('ResponseMetadata', {})
+            )
+
+            # Verify the write by immediately reading it back for heartbeat jobs
+            if job.job_type == 'heartbeat_event':
+                try:
+                    verify_response = self._table.get_item(Key={'PK': 'job', 'SK': item['SK']}, ConsistentRead=True)
+                    if 'Item' in verify_response:
+                        logger.info('DEBUG: Verification read SUCCESS - job exists in DynamoDB')
+                    else:  # pragma: no cover
+                        logger.error('DEBUG: Verification read FAILED - job NOT found in DynamoDB after put_item')
+                except Exception:  # pragma: no cover
+                    logger.exception('DEBUG: Verification read ERROR')
+
+        except Exception:  # pragma: no cover
+            logger.exception('DEBUG: put_item FAILED')
+            raise
 
     def get_job_by_id(self, job_id: UUID, scheduled_for: datetime) -> ScheduledJob | None:
         """Get a job by its ID and scheduled_for time.
