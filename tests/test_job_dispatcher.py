@@ -157,7 +157,7 @@ def test_register_handler_decorator() -> None:
 
 
 def test_dispatcher_heartbeat_logging_successful_dispatch() -> None:
-    """Test that dispatcher logs heartbeat job processing steps."""
+    """Test that dispatcher successfully processes heartbeat job."""
     from unittest.mock import patch
     from uuid import UUID
 
@@ -181,30 +181,17 @@ def test_dispatcher_heartbeat_logging_successful_dispatch() -> None:
         created_at=datetime(2025, 7, 11, 8, 0, 0, tzinfo=UTC),
     )
 
-    with (
-        patch('logging.getLogger') as mock_get_logger,
-        patch('companion_memory.heartbeat.run_heartbeat_event_job'),
-    ):
-        mock_logger = mock_get_logger.return_value
-
+    with patch('companion_memory.heartbeat.run_heartbeat_event_job') as mock_run_event:
         # Dispatch the heartbeat job
-        dispatcher.dispatch(heartbeat_job)
+        handler_instance = dispatcher.dispatch(heartbeat_job)
 
-        # Verify heartbeat logging occurred
-        mock_logger.info.assert_any_call(
-            'DISPATCHER START: job_type=%s, job_id=%s, payload=%s',
-            'heartbeat_event',
-            heartbeat_job.job_id,
-            heartbeat_job.payload,
-        )
-        mock_logger.info.assert_any_call('DISPATCHER HANDLERS: %s', ['heartbeat_event'])
-        mock_logger.info.assert_any_call('DISPATCHER FOUND HANDLER: %s', HeartbeatEventHandler)
-        mock_logger.info.assert_any_call('DISPATCHER SUCCESS: handler completed')
+        # Verify the handler was called correctly
+        mock_run_event.assert_called_once_with('test-uuid-123')
+        assert isinstance(handler_instance, HeartbeatEventHandler)
 
 
 def test_dispatcher_heartbeat_logging_no_handler_error() -> None:
-    """Test that dispatcher logs heartbeat job handler not found error."""
-    from unittest.mock import patch
+    """Test that dispatcher raises error when no handler is registered."""
     from uuid import UUID
 
     from companion_memory.job_dispatcher import JobDispatcher
@@ -222,20 +209,13 @@ def test_dispatcher_heartbeat_logging_no_handler_error() -> None:
         created_at=datetime(2025, 7, 11, 8, 0, 0, tzinfo=UTC),
     )
 
-    with patch('logging.getLogger') as mock_get_logger:
-        mock_logger = mock_get_logger.return_value
-
-        # Dispatch the heartbeat job - should raise ValueError
-        with pytest.raises(ValueError, match='No handler registered for job type'):
-            dispatcher.dispatch(heartbeat_job)
-
-        # Verify heartbeat error logging occurred
-        mock_logger.error.assert_called_once_with('DISPATCHER ERROR: No handler for heartbeat_event')
+    # Dispatch the heartbeat job - should raise ValueError
+    with pytest.raises(ValueError, match='No handler registered for job type'):
+        dispatcher.dispatch(heartbeat_job)
 
 
 def test_dispatcher_heartbeat_logging_validation_error() -> None:
-    """Test that dispatcher logs heartbeat job payload validation errors."""
-    from unittest.mock import patch
+    """Test that dispatcher raises error when payload validation fails."""
     from uuid import UUID
 
     from companion_memory.job_dispatcher import JobDispatcher
@@ -259,15 +239,9 @@ def test_dispatcher_heartbeat_logging_validation_error() -> None:
         created_at=datetime(2025, 7, 11, 8, 0, 0, tzinfo=UTC),
     )
 
-    with patch('logging.getLogger') as mock_get_logger:
-        mock_logger = mock_get_logger.return_value
-
-        # Dispatch the heartbeat job - should raise ValueError
-        with pytest.raises(ValueError, match='Payload validation failed for job type'):
-            dispatcher.dispatch(heartbeat_job)
-
-        # Verify heartbeat validation error logging occurred
-        mock_logger.exception.assert_called_once_with('DISPATCHER VALIDATION ERROR for heartbeat_event')
+    # Dispatch the heartbeat job - should raise ValueError
+    with pytest.raises(ValueError, match='Payload validation failed for job type'):
+        dispatcher.dispatch(heartbeat_job)
 
 
 def test_register_all_handlers() -> None:

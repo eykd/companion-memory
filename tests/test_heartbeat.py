@@ -102,7 +102,7 @@ def test_run_heartbeat_timed_job_generates_uuid_and_logs() -> None:
 
 def test_run_heartbeat_timed_job_handles_scheduling_failure() -> None:
     """Test that run_heartbeat_timed_job handles scheduling failures gracefully."""
-    from unittest.mock import patch
+    from unittest.mock import call, patch
 
     from companion_memory.heartbeat import run_heartbeat_timed_job
 
@@ -125,7 +125,11 @@ def test_run_heartbeat_timed_job_handles_scheduling_failure() -> None:
         mock_uuid1.assert_called_once()
 
         # Verify both timed log and exception log are called
-        mock_logger.info.assert_called_once_with('Heartbeat (timed): UUID=%s', test_uuid)
+        expected_calls = [
+            call('Heartbeat (timed): UUID=%s', test_uuid),
+            call('Scheduled heartbeat event job for UUID=%s', test_uuid),
+        ]
+        mock_logger.info.assert_has_calls(expected_calls)
         mock_logger.exception.assert_called_once_with('Failed to schedule heartbeat event job for UUID=%s', test_uuid)
 
 
