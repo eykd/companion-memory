@@ -177,18 +177,34 @@ class JobTable:
         logger.info('DEBUG: Query without filter returned %d items', len(response_no_filter.get('Items', [])))
         logger.info('DEBUG: Query with filter returned %d items', len(response.get('Items', [])))
 
-        # Debug: examine the first few items to see their actual status values and SK
-        for i, item in enumerate(response_no_filter.get('Items', [])[:3]):
+        # Debug: examine ALL items to see their actual status values and SK, especially recent ones
+        recent_items = []
+        current_date = now.strftime('%Y-%m-%d')
+
+        for i, item in enumerate(response_no_filter.get('Items', [])):
             status_value = item.get('status')
-            sk_value = item.get('SK')
-            logger.info(
-                'DEBUG: Time-bounded query item %d: SK=%s, status=%s (type: %s, repr: %s)',
-                i,
-                sk_value,
-                status_value,
-                type(status_value).__name__,
-                repr(status_value),
-            )
+            sk_value = item.get('SK', '')
+
+            # Log first 3 items as before
+            if i < 3:
+                logger.info(
+                    'DEBUG: Time-bounded query item %d: SK=%s, status=%s (type: %s, repr: %s)',
+                    i,
+                    sk_value,
+                    status_value,
+                    type(status_value).__name__,
+                    repr(status_value),
+                )
+
+            # Collect items from today for additional analysis
+            if current_date in sk_value:
+                recent_items.append(f'SK={sk_value}, status={status_value}')
+
+        # Log today's items if any were found
+        if recent_items:
+            logger.info('DEBUG: Found items from today (%s): %s', current_date, recent_items[:10])
+        else:
+            logger.info('DEBUG: No items found from today (%s) in time-bounded query', current_date)
 
         # Test different filter approaches
         pending_count_manual = len([
