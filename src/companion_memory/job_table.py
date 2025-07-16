@@ -127,6 +127,13 @@ class JobTable:
         # Use a high Unicode character to ensure we capture all UUIDs for timestamps <= now
         query_sk = f'scheduled#{now.isoformat()}#\uffff'
 
+        # Try query without filter first to debug
+        response_no_filter = self._table.query(
+            KeyConditionExpression=Key('PK').eq('job') & Key('SK').lte(query_sk),
+            Limit=limit,
+            ConsistentRead=True,
+        )
+
         response = self._table.query(
             KeyConditionExpression=Key('PK').eq('job') & Key('SK').lte(query_sk),
             FilterExpression=Key('status').eq('pending'),
@@ -138,6 +145,8 @@ class JobTable:
         import logging
 
         logger = logging.getLogger(__name__)
+        logger.info('DEBUG: Query without filter returned %d items', len(response_no_filter.get('Items', [])))
+        logger.info('DEBUG: Query with filter returned %d items', len(response.get('Items', [])))
         logger.info('DEBUG: Querying with now=%s, query_sk=%s', now.isoformat(), repr(query_sk))
         logger.info('DynamoDB query for jobs <= %s returned %d items', query_sk, len(response.get('Items', [])))
 
