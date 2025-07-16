@@ -202,7 +202,7 @@ def test_schedule_heartbeat_job_calls_run_heartbeat_timed_job() -> None:
 
 def test_schedule_event_heartbeat_job_creates_delayed_job() -> None:
     """Test that schedule_event_heartbeat_job creates a job with 10-second delay."""
-    from datetime import UTC, datetime, timedelta
+    from datetime import UTC, datetime
 
     from companion_memory.heartbeat import schedule_event_heartbeat_job
 
@@ -237,7 +237,7 @@ def test_schedule_event_heartbeat_job_creates_delayed_job() -> None:
         assert str(job_call.job_id) == test_job_id
         assert job_call.job_type == 'heartbeat_event'
         assert job_call.payload == {'heartbeat_uuid': test_uuid}
-        assert job_call.scheduled_for == test_now + timedelta(seconds=10)
+        assert job_call.scheduled_for == test_now
         assert job_call.status == 'pending'
         assert job_call.attempts == 0
         assert job_call.created_at == test_now

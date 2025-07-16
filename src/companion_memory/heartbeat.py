@@ -3,7 +3,7 @@
 import logging
 import os
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 from pydantic import BaseModel, Field
 
@@ -111,9 +111,9 @@ def schedule_event_heartbeat_job(heartbeat_uuid: str) -> None:
     from companion_memory.job_models import ScheduledJob
     from companion_memory.job_table import JobTable
 
-    # Calculate when to run (10 seconds from now)
+    # Calculate when to run (immediately)
     now_utc = datetime.now(UTC)
-    scheduled_time = now_utc + timedelta(seconds=10)
+    scheduled_time = now_utc
 
     # Create the job
     job = ScheduledJob(

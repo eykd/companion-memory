@@ -112,7 +112,7 @@ class JobTable:
         except Exception:  # noqa: BLE001  # pragma: no cover
             return None
 
-    def get_due_jobs(self, now: datetime, limit: int = 25) -> list[ScheduledJob]:
+    def get_due_jobs(self, now: datetime, limit: int = 25) -> list[ScheduledJob]:  # noqa: C901
         """Fetch jobs that are due to run before the given time.
 
         Args:
@@ -127,27 +127,6 @@ class JobTable:
         # Use a high Unicode character to ensure we capture all UUIDs for timestamps <= now
         query_sk = f'scheduled#{now.isoformat()}#\uffff'
 
-        # Retry logic to handle DynamoDB eventual consistency issues
-        import time
-
-        max_retries = 3
-        retry_delay = 0.1  # Start with 100ms delay
-
-        for attempt in range(max_retries + 1):
-            jobs = self._query_due_jobs_attempt(query_sk, limit, now, attempt)
-
-            # If we found jobs or this is the last attempt, return the results
-            if jobs or attempt == max_retries:
-                return jobs
-
-            # Wait before retrying (exponential backoff)
-            time.sleep(retry_delay)
-            retry_delay *= 2  # Double the delay for next retry
-
-        return []  # Fallback, though this should never be reached  # pragma: no cover
-
-    def _query_due_jobs_attempt(self, query_sk: str, limit: int, now: datetime, attempt: int) -> list[ScheduledJob]:  # noqa: C901
-        """Single attempt to query for due jobs with comprehensive debugging."""
         # Try query without filter first to debug
         response_no_filter = self._table.query(
             KeyConditionExpression=Key('PK').eq('job') & Key('SK').lte(query_sk),
@@ -166,11 +145,7 @@ class JobTable:
         import logging
 
         logger = logging.getLogger(__name__)
-        logger.info(
-            'DEBUG: Attempt %d - Query without filter returned %d items',
-            attempt,
-            len(response_no_filter.get('Items', [])),
-        )
+        logger.info('DEBUG: Query without filter returned %d items', len(response_no_filter.get('Items', [])))
         logger.info('DEBUG: Query with filter returned %d items', len(response.get('Items', [])))
 
         # Debug: examine the first few items to see their actual status values and SK
