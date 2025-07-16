@@ -342,8 +342,8 @@ def test_distributed_scheduler_start_success() -> None:
         assert scheduler.started is True
         mock_scheduler.start.assert_called_once()
         assert (
-            mock_scheduler.add_job.call_count == 7
-        )  # lock_manager + heartbeat + user_timezone_sync + daily_summary_scheduler + work_sampling_scheduler + job_worker_poller + job_cleanup
+            mock_scheduler.add_job.call_count == 6
+        )  # lock_manager + user_timezone_sync + daily_summary_scheduler + work_sampling_scheduler + job_worker_poller + job_cleanup
         mock_acquire.assert_called_once()
 
 
@@ -422,30 +422,6 @@ def test_distributed_scheduler_manage_lock_without_lock() -> None:
             scheduler._manage_lock()  # noqa: SLF001
 
             mock_acquire.assert_called_once()
-
-
-def test_distributed_scheduler_heartbeat_logger() -> None:
-    """Test scheduler heartbeat logger when lock is held."""
-    with patch('boto3.resource'):
-        scheduler = DistributedScheduler('TestTable')
-        scheduler.lock.lock_acquired = True  # Must have lock to log heartbeat
-
-        # Access private method for testing
-        scheduler._heartbeat_logger()  # noqa: SLF001
-
-        # Heartbeat logging was removed - just verify method executes without error
-
-
-def test_distributed_scheduler_heartbeat_logger_without_lock() -> None:
-    """Test scheduler heartbeat logger when lock is not held."""
-    with patch('boto3.resource'):
-        scheduler = DistributedScheduler('TestTable')
-        scheduler.lock.lock_acquired = False  # No lock
-
-        # Access private method for testing
-        scheduler._heartbeat_logger()  # noqa: SLF001
-
-        # Heartbeat logging was removed - method should execute without error or logging
 
 
 def test_distributed_scheduler_add_job_when_started() -> None:
@@ -544,9 +520,8 @@ def test_distributed_scheduler_remove_active_jobs() -> None:
         # Call the method
         scheduler._remove_active_jobs()  # noqa: SLF001
 
-        # Should remove five jobs
-        assert mock_scheduler.remove_job.call_count == 5
-        mock_scheduler.remove_job.assert_any_call('heartbeat_logger')
+        # Should remove four jobs
+        assert mock_scheduler.remove_job.call_count == 4
         mock_scheduler.remove_job.assert_any_call('daily_summary_scheduler')
         mock_scheduler.remove_job.assert_any_call('work_sampling_scheduler')
         mock_scheduler.remove_job.assert_any_call('job_worker_poller')
@@ -874,8 +849,8 @@ def test_distributed_scheduler_job_worker_disabled() -> None:
 
         # Should only add 6 jobs (not including job worker poller)
         assert (
-            mock_scheduler.add_job.call_count == 6
-        )  # lock_manager + heartbeat + user_timezone_sync + daily_summary_scheduler + work_sampling_scheduler + job_cleanup
+            mock_scheduler.add_job.call_count == 5
+        )  # lock_manager + user_timezone_sync + daily_summary_scheduler + work_sampling_scheduler + job_cleanup
 
 
 def test_distributed_scheduler_remove_job_worker_poller() -> None:

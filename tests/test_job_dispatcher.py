@@ -156,94 +156,6 @@ def test_register_handler_decorator() -> None:
     assert isinstance(handler_instance, TestDecoratedHandler)
 
 
-def test_dispatcher_heartbeat_logging_successful_dispatch() -> None:
-    """Test that dispatcher successfully processes heartbeat job."""
-    from unittest.mock import patch
-    from uuid import UUID
-
-    from companion_memory.job_dispatcher import JobDispatcher
-    from companion_memory.job_models import ScheduledJob
-
-    dispatcher = JobDispatcher()
-
-    # Register the actual heartbeat handler
-    from companion_memory.heartbeat import HeartbeatEventHandler
-
-    dispatcher.register('heartbeat_event', HeartbeatEventHandler)
-
-    heartbeat_job = ScheduledJob(
-        job_id=UUID('12345678-1234-5678-9abc-123456789abc'),
-        job_type='heartbeat_event',
-        payload={'heartbeat_uuid': 'test-uuid-123'},
-        scheduled_for=datetime(2025, 7, 11, 9, 0, 0, tzinfo=UTC),
-        status='pending',
-        attempts=0,
-        created_at=datetime(2025, 7, 11, 8, 0, 0, tzinfo=UTC),
-    )
-
-    with patch('companion_memory.heartbeat.run_heartbeat_event_job') as mock_run_event:
-        # Dispatch the heartbeat job
-        handler_instance = dispatcher.dispatch(heartbeat_job)
-
-        # Verify the handler was called correctly
-        mock_run_event.assert_called_once_with('test-uuid-123')
-        assert isinstance(handler_instance, HeartbeatEventHandler)
-
-
-def test_dispatcher_heartbeat_logging_no_handler_error() -> None:
-    """Test that dispatcher raises error when no handler is registered."""
-    from uuid import UUID
-
-    from companion_memory.job_dispatcher import JobDispatcher
-    from companion_memory.job_models import ScheduledJob
-
-    dispatcher = JobDispatcher()  # No handlers registered
-
-    heartbeat_job = ScheduledJob(
-        job_id=UUID('12345678-1234-5678-9abc-123456789abc'),
-        job_type='heartbeat_event',
-        payload={'heartbeat_uuid': 'test-uuid-123'},
-        scheduled_for=datetime(2025, 7, 11, 9, 0, 0, tzinfo=UTC),
-        status='pending',
-        attempts=0,
-        created_at=datetime(2025, 7, 11, 8, 0, 0, tzinfo=UTC),
-    )
-
-    # Dispatch the heartbeat job - should raise ValueError
-    with pytest.raises(ValueError, match='No handler registered for job type'):
-        dispatcher.dispatch(heartbeat_job)
-
-
-def test_dispatcher_heartbeat_logging_validation_error() -> None:
-    """Test that dispatcher raises error when payload validation fails."""
-    from uuid import UUID
-
-    from companion_memory.job_dispatcher import JobDispatcher
-    from companion_memory.job_models import ScheduledJob
-
-    dispatcher = JobDispatcher()
-
-    # Register the actual heartbeat handler
-    from companion_memory.heartbeat import HeartbeatEventHandler
-
-    dispatcher.register('heartbeat_event', HeartbeatEventHandler)
-
-    # Create job with invalid payload (missing required field)
-    heartbeat_job = ScheduledJob(
-        job_id=UUID('12345678-1234-5678-9abc-123456789abc'),
-        job_type='heartbeat_event',
-        payload={'invalid_field': 'value'},  # Missing heartbeat_uuid
-        scheduled_for=datetime(2025, 7, 11, 9, 0, 0, tzinfo=UTC),
-        status='pending',
-        attempts=0,
-        created_at=datetime(2025, 7, 11, 8, 0, 0, tzinfo=UTC),
-    )
-
-    # Dispatch the heartbeat job - should raise ValueError
-    with pytest.raises(ValueError, match='Payload validation failed for job type'):
-        dispatcher.dispatch(heartbeat_job)
-
-
 def test_register_all_handlers() -> None:
     """Test that register_all_handlers copies all handlers from global dispatcher."""
 
@@ -304,18 +216,14 @@ def test_get_registered_handlers() -> None:
 
 
 @mock_aws
-def test_heartbeat_and_work_sampling_handlers_are_registered() -> None:
-    """Test that heartbeat and work sampling handlers are properly registered."""
+def test_work_sampling_handlers_are_registered() -> None:
+    """Test that work sampling handlers are properly registered."""
     # Import the handler modules to ensure decorators are executed
-    import companion_memory.heartbeat
     import companion_memory.work_sampling_handler  # noqa: F401
     from companion_memory.job_dispatcher import global_dispatcher
 
     # Check that handlers are registered
     registered_handlers = global_dispatcher.get_registered_handlers()
-
-    # Should have heartbeat_event handler
-    assert 'heartbeat_event' in registered_handlers
 
     # Should have work_sampling_prompt handler
     assert 'work_sampling_prompt' in registered_handlers

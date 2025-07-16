@@ -248,15 +248,6 @@ class DistributedScheduler:
         if self._jobs_added or not self.scheduler:
             return
 
-        # Schedule heartbeat logger
-        self.scheduler.add_job(self._heartbeat_logger, 'interval', seconds=60, id='heartbeat_logger', max_instances=1)
-
-        # Schedule diagnostic heartbeat feature if enabled
-        from companion_memory.heartbeat import is_heartbeat_enabled, schedule_heartbeat_job
-
-        if is_heartbeat_enabled():
-            self.scheduler.add_job(schedule_heartbeat_job, 'cron', minute='*', id='heartbeat_cron', max_instances=1)
-
         # Schedule user time zone sync every 6 hours
         self.scheduler.add_job(sync_user_timezone, 'interval', hours=6, id='user_timezone_sync', max_instances=1)
 
@@ -297,17 +288,6 @@ class DistributedScheduler:
         if not self._jobs_added or not self.scheduler:
             return
 
-        # Remove heartbeat logger
-        with contextlib.suppress(Exception):
-            self.scheduler.remove_job('heartbeat_logger')
-
-        # Remove heartbeat cron job if it was added
-        from companion_memory.heartbeat import is_heartbeat_enabled
-
-        if is_heartbeat_enabled():  # pragma: no cover
-            with contextlib.suppress(Exception):  # pragma: no cover
-                self.scheduler.remove_job('heartbeat_cron')  # pragma: no cover
-
         # Remove daily summary scheduler
         with contextlib.suppress(Exception):
             self.scheduler.remove_job('daily_summary_scheduler')
@@ -325,12 +305,6 @@ class DistributedScheduler:
             self.scheduler.remove_job('job_cleanup')
 
         self._jobs_added = False
-
-    def _heartbeat_logger(self) -> None:
-        """Log a heartbeat message to indicate scheduler is active."""
-        # Double-check we still have the lock before logging
-        if self.lock.lock_acquired:
-            pass  # Heartbeat logging removed per request
 
     def _poll_and_process_jobs(self) -> None:
         """Poll and process scheduled jobs from the job queue."""

@@ -125,8 +125,8 @@ def test_get_due_jobs_filters_out_failed_jobs() -> None:
     # Create pending job
     pending_job = ScheduledJob(
         job_id=uuid4(),
-        job_type='heartbeat_event',
-        payload={'heartbeat_uuid': 'test-pending'},
+        job_type='test_job',
+        payload={'test_data': 'test-pending'},
         scheduled_for=now - timedelta(minutes=10),
         status='pending',
         attempts=0,
@@ -136,8 +136,8 @@ def test_get_due_jobs_filters_out_failed_jobs() -> None:
     # Create failed job (older, should be returned first without filter)
     failed_job = ScheduledJob(
         job_id=uuid4(),
-        job_type='heartbeat_event',
-        payload={'heartbeat_uuid': 'test-failed'},
+        job_type='test_job',
+        payload={'test_data': 'test-failed'},
         scheduled_for=now - timedelta(hours=1),
         status='failed',
         attempts=3,
@@ -147,8 +147,8 @@ def test_get_due_jobs_filters_out_failed_jobs() -> None:
     # Create completed job
     completed_job = ScheduledJob(
         job_id=uuid4(),
-        job_type='heartbeat_event',
-        payload={'heartbeat_uuid': 'test-completed'},
+        job_type='test_job',
+        payload={'test_data': 'test-completed'},
         scheduled_for=now - timedelta(minutes=30),
         status='completed',
         attempts=1,
@@ -180,8 +180,8 @@ def test_cleanup_old_jobs() -> None:
     # Create old jobs that should be deleted
     old_failed_job = ScheduledJob(
         job_id=uuid4(),
-        job_type='heartbeat_event',
-        payload={'heartbeat_uuid': 'old-failed'},
+        job_type='test_job',
+        payload={'test_data': 'old-failed'},
         scheduled_for=old_date,
         status='failed',
         attempts=3,
@@ -211,8 +211,8 @@ def test_cleanup_old_jobs() -> None:
     # Create recent jobs that should NOT be deleted
     recent_failed_job = ScheduledJob(
         job_id=uuid4(),
-        job_type='heartbeat_event',
-        payload={'heartbeat_uuid': 'recent-failed'},
+        job_type='test_job',
+        payload={'test_data': 'recent-failed'},
         scheduled_for=recent_date,
         status='failed',
         attempts=2,
@@ -281,8 +281,8 @@ def test_cleanup_old_jobs_with_custom_days() -> None:
 
     old_failed_job = ScheduledJob(
         job_id=uuid4(),
-        job_type='heartbeat_event',
-        payload={'heartbeat_uuid': 'old-failed'},
+        job_type='test_job',
+        payload={'test_data': 'old-failed'},
         scheduled_for=old_date,
         status='failed',
         attempts=3,

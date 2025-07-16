@@ -61,7 +61,6 @@ class JobWorker:
     def register_all_handlers_from_global(self) -> None:
         """Register all handlers from the global dispatcher."""
         # Import handler modules to ensure decorators are executed
-        import companion_memory.heartbeat
         import companion_memory.summary_jobs
         import companion_memory.work_sampling_handler  # noqa: F401
         from companion_memory.job_dispatcher import register_all_handlers
@@ -184,15 +183,6 @@ class JobWorker:
 
         """
         try:
-            # Heartbeat job dispatch logging
-            if job.job_type == 'heartbeat_event':
-                logger.info(
-                    'HEARTBEAT JOB DISPATCH: job_id=%s, payload=%s, scheduled_for=%s',
-                    job.job_id,
-                    job.payload,
-                    job.scheduled_for.isoformat(),
-                )
-
             # Dispatch job to handler
             self._dispatcher.dispatch(job)
 
@@ -224,14 +214,6 @@ class JobWorker:
         new_attempts = job.attempts + 1
 
         # Job failure (debug logging removed)
-        if job.job_type == 'heartbeat_event':
-            logger.error(
-                'HEARTBEAT JOB FAILURE: job_id=%s, attempts=%d, error=%s, payload=%s',
-                job.job_id,
-                job.attempts,
-                f'{type(error).__name__}: {error}',
-                job.payload,
-            )
 
         # Report error to Sentry with full job context
         self._report_to_sentry(job, error)
@@ -241,22 +223,10 @@ class JobWorker:
             # Calculate next run time with exponential backoff
             next_run = self._retry_policy.calculate_next_run(now, new_attempts)
 
-            if job.job_type == 'heartbeat_event':
-                logger.info(
-                    'HEARTBEAT JOB RETRY: job_id=%s, attempts=%d, error=%s, payload=%s, next_run=%s',
-                    job.job_id,
-                    new_attempts,
-                    f'{type(error).__name__}: {error}',
-                    job.payload,
-                    next_run,
-                )
-
             # Reschedule the job for later
             self._reschedule_job(job, next_run, new_attempts, error_message)
         else:
             # Job dead letter (debug logging removed)
-            if job.job_type == 'heartbeat_event':
-                logger.error('HEARTBEAT JOB DEAD LETTER: job_id=%s, max_attempts exceeded', job.job_id)
             # Job has exceeded max attempts, send to dead letter
             self._job_table.update_job_status(
                 job.job_id,

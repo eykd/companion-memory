@@ -59,12 +59,8 @@ class JobDispatcher:
         """
         return self._handlers.copy()
 
-    def _log_heartbeat_dispatch_start(self, job: ScheduledJob) -> None:
-        """Log heartbeat job dispatch start information."""
-        # Debug logging removed
-
     def _validate_and_log_payload(self, job: ScheduledJob, handler_class: type[BaseJobHandler]) -> BaseModel:
-        """Validate job payload and log heartbeat job details."""
+        """Validate job payload and log details."""
         try:
             payload_model = handler_class.payload_model()
             validated_payload = payload_model.model_validate(job.payload)
@@ -86,8 +82,6 @@ class JobDispatcher:
             ValueError: If no handler is registered for the job type or payload validation fails
 
         """
-        self._log_heartbeat_dispatch_start(job)
-
         # Check if handler is registered
         if job.job_type not in self._handlers:
             raise ValueError('No handler registered for job type', job.job_type)
