@@ -112,7 +112,7 @@ class JobTable:
         except Exception:  # noqa: BLE001  # pragma: no cover
             return None
 
-    def get_due_jobs(self, now: datetime, limit: int = 25) -> list[ScheduledJob]:
+    def get_due_jobs(self, now: datetime, limit: int = 25) -> list[ScheduledJob]:  # noqa: C901
         """Fetch jobs that are due to run before the given time.
 
         Args:
@@ -180,16 +180,25 @@ class JobTable:
             # Look specifically for recent pending jobs
             recent_pending_jobs = []
             all_pending_jobs = []
+            very_recent_jobs = []  # Jobs from the last few minutes
             for item in all_jobs_response.get('Items', []):
                 if item.get('status') == 'pending':  # pragma: no cover
                     all_pending_jobs.append(item.get('SK', 'unknown'))  # pragma: no cover
-                    if '2025-07-15T23:' in item.get('SK', ''):  # Today's jobs  # pragma: no cover
+                    if '2025-07-16T00:' in item.get('SK', ''):  # Today's recent jobs  # pragma: no cover
                         recent_pending_jobs.append(item.get('SK', 'unknown'))  # pragma: no cover
+                    # Check for jobs in the last 5 minutes
+                    sk = item.get('SK', '')  # pragma: no cover
+                    if sk.startswith(('scheduled#2025-07-16T00:2', 'scheduled#2025-07-16T00:3')):  # pragma: no cover
+                        very_recent_jobs.append(f'SK={sk}, status={item.get("status")}')  # pragma: no cover
 
             if all_pending_jobs:  # pragma: no cover
                 logger.info('DEBUG: Found pending jobs: %s', all_pending_jobs)  # pragma: no cover
             if recent_pending_jobs:  # pragma: no cover
                 logger.info('DEBUG: Found recent pending jobs: %s', recent_pending_jobs)  # pragma: no cover
+            if very_recent_jobs:  # pragma: no cover
+                logger.info('DEBUG: Found very recent jobs (last 5 min): %s', very_recent_jobs)  # pragma: no cover
+            else:  # pragma: no cover
+                logger.info('DEBUG: No very recent jobs found in full scan')  # pragma: no cover
 
             # Show first 5 jobs for debugging with more details
             for item in all_jobs_response.get('Items', [])[:5]:
